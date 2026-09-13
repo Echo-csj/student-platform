@@ -3,7 +3,14 @@ window.AI = (function () {
   const sbReady = () => Store.getMode() === "supabase" && Store.client();
 
   async function callFn(name, body) {
-    const sb = Store.client();
+    const cfg = window.APP_CONFIG || {};
+    // 边缘函数（grade-paper / ai-text）仍走云项目部署的实例（自建暂未部署），
+    // 通过 EDGE_URL 指定；缺省回退到 SUPABASE_URL。
+    const edgeUrl = (cfg.EDGE_URL || cfg.SUPABASE_URL || "").replace(/\/$/, "");
+    const anon = cfg.SUPABASE_ANON_KEY || "";
+    const sb = (window.supabase && window.supabase.createClient && edgeUrl)
+      ? window.supabase.createClient(edgeUrl, anon)
+      : Store.client();
     const { data, error } = await sb.functions.invoke(name, { body });
     if (error) throw error;
     return data;
