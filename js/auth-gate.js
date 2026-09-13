@@ -37,6 +37,20 @@
   }
 
   function showAccountChip(email) {
+    var foot = document.getElementById('auth-foot');
+    if (foot) {
+      // 登录态/退出移入左侧栏底部账户区（不再用右上角悬浮条遮挡内容）
+      foot.innerHTML = '<div class="sf-mail">' + (email || '已登录') + '</div>' +
+        '<button id="sp-signout" class="sf-logout" type="button">退出登录</button>';
+      var btn = document.getElementById('sp-signout');
+      if (btn) btn.onclick = function () {
+        if (Store && Store.signOut) {
+          Store.signOut().then(function () { location.reload(); }).catch(function () { location.reload(); });
+        } else { location.reload(); }
+      };
+      return;
+    }
+    // 回退：无侧栏账户区时仍用悬浮 pill
     var old = document.getElementById('sp-account');
     if (old) old.remove();
     var chip = document.createElement('div');
@@ -65,6 +79,8 @@
     if (vc) vc.innerHTML = '';
     var chip = document.getElementById('sp-account');
     if (chip) chip.remove();
+    var foot = document.getElementById('auth-foot');
+    if (foot) foot.innerHTML = '';
   }
 
   function doSignIn() {
