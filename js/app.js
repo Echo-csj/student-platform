@@ -331,19 +331,6 @@
     $("#cAdd").onclick = async () => { const f = $("#cFile").files[0]; await Store.upsert("calendar_db", { title: $("#cTitle").value || (f ? f.name : "未命名"), content: $("#cContent").value, file_url: f ? f.name : "" }); toast("已入库"); viewDB(); };
   }
 
-  // ================= 认证 =================
-  async function maybeAuthGate() {
-    if (Store.getMode() !== "supabase") return false;
-    const u = await Store.getUser();
-    if (u) return false;
-    $("#view").innerHTML = `<div class="empty" style="max-width:380px;margin:80px auto"><h3>登录以使用学员管理平台</h3><p class="muted">已检测到 Supabase 配置，请登录（数据受行级权限保护）。</p>
-      <input id="auEmail" placeholder="邮箱" style="margin-bottom:10px"><input id="auPw" type="password" placeholder="密码" style="margin-bottom:10px">
-      <div class="flex gap-8" style="justify-content:center"><button class="btn btn-primary" id="auIn">登录</button><button class="btn btn-ghost" id="auUp">注册</button></div></div>`;
-    $("#auIn").onclick = async () => { try { await Store.signIn($("#auEmail").value, $("#auPw").value); toast("已登录"); router(); } catch (e) { toast(e.message); } };
-    $("#auUp").onclick = async () => { try { await Store.signUp($("#auEmail").value, $("#auPw").value, "教师"); toast("注册成功，请查收验证邮件"); } catch (e) { toast(e.message); } };
-    return true;
-  }
-
   // ================= 路由 =================
   function setActive(nav) { $$(".nav-item[data-nav]").forEach((n) => n.classList.toggle("active", n.dataset.nav === nav)); }
   function setCrumb(t) { $("#pageTitle").textContent = NAV.find((n) => location.hash.includes("/" + n.id) || (location.hash === "#/" + n.id))?.label || "学员管理平台"; $("#pageCrumb").textContent = t; }
@@ -352,7 +339,11 @@
     const parts = hash.replace(/^#\//, "").split("/");
     const nav = parts[0] || "students";
     setActive(nav);
-    if (await maybeAuthGate()) return;
+    // 已接入 Supabase 但未登录：阻止渲染内部数据，交由全屏登录门接管
+    if (Store.getMode() === "supabase") {
+      const u = await Store.getUser();
+      if (!u) { window.dispatchEvent(new Event("sp:needs-auth")); return; }
+    }
     if (nav === "enroll") return viewEnroll(parts[1]);
     if (nav === "suggest") return viewSuggest(parts[1]);
     if (nav === "plan") return viewPlan(parts[1]);
@@ -366,13 +357,18 @@
   // ================= 初始化 =================
   async function init() {
     await Store.init();
-    document.documentElement.setAttribute("data-theme", (Store.isConfigured() ? "light" : "light"));
+    document.documentElement.setAttribute("data-theme", "light");
     $("#themeToggle").onclick = () => { const c = document.documentElement.getAttribute("data-theme"); const n = c === "dark" ? "light" : "dark"; document.documentElement.setAttribute("data-theme", n); };
-    $("#exportAll").onclick = () => toast("演示模式：数据存于本浏览器；接入 Supabase 后可在多端同步");
+    $("#exportAll").onclick = () => toast(Store.getMode() === "supabase" ? "数据已保存在自建 Supabase（受 owner 行级权限保护）" : "演示模式：数据存于本浏览器");
     $$(".nav-item[data-nav]").forEach((n) => (n.onclick = () => { const id = n.dataset.nav; location.hash = id === "students" ? "#/students" : "#/" + id; }));
     window.addEventListener("hashchange", router);
-    await seedIfEmpty();
-    router();
+    window.SP = { render: router };   // 供 auth-gate.js 解锁后驱动渲染
+    // 演示模式（未配置后端）：直接渲染；已接入 Supabase：交给全屏登录门控制渲染
+    if (Store.getMode() !== "supabase") {
+      await seedIfEmpty();
+      router();
+    }
+    // 注意：supabase 模式下不在此渲染，等待 auth-gate 判定登录态后驱动渲染
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();
 })();
