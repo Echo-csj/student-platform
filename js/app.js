@@ -349,27 +349,9 @@
     $("#view").innerHTML = `<div class="empty" style="max-width:380px;margin:80px auto"><h3>登录以使用学员管理平台</h3><p class="muted">已检测到 Supabase 配置，请登录（数据受行级权限保护）。</p>
       <input id="auEmail" placeholder="邮箱" style="margin-bottom:10px"><input id="auPw" type="password" placeholder="密码" style="margin-bottom:10px">
       <div class="flex gap-8" style="justify-content:center"><button class="btn btn-primary" id="auIn">登录</button><button class="btn btn-ghost" id="auUp">注册</button></div></div>`;
-    $("#auIn").onclick = async () => { try { await Store.signIn($("#auEmail").value, $("#auPw").value); toast("已登录"); await renderAccountArea(); router(); } catch (e) { toast(e.message); } };
+    $("#auIn").onclick = async () => { try { await Store.signIn($("#auEmail").value, $("#auPw").value); toast("已登录"); router(); } catch (e) { toast(e.message); } };
     $("#auUp").onclick = async () => { try { await Store.signUp($("#auEmail").value, $("#auPw").value, "教师"); toast("注册成功，请查收验证邮件"); } catch (e) { toast(e.message); } };
     return true;
-  }
-
-  // ================= 账户区（侧栏底部：登录态 + 退出登录）=================
-  async function renderAccountArea() {
-    var foot = document.getElementById("auth-foot");
-    if (!foot) return;
-    var box = foot.querySelector("#authFootBox");
-    if (!box) { box = document.createElement("div"); box.id = "authFootBox"; foot.appendChild(box); }
-    if (Store.getMode() !== "supabase") { box.innerHTML = ""; return; }
-    var u = null;
-    try { u = await Store.getUser(); } catch (e) { u = null; }
-    if (!u) { box.innerHTML = ""; return; }
-    box.innerHTML = '<div class="sf-mail">' + (u.email || "已登录") + '</div>' +
-      '<button class="sf-logout" type="button" id="spSignout">退出登录</button>';
-    var btn = document.getElementById("spSignout");
-    if (btn) btn.onclick = function () {
-      Store.signOut().then(function () { renderAccountArea(); router(); }).catch(function () { location.reload(); });
-    };
   }
 
   // ================= 路由 =================
@@ -404,7 +386,10 @@
     window.addEventListener("hashchange", router);
     await seedIfEmpty();
     router();
-    await renderAccountArea();
+    // PWA：注册 Service Worker（仅 https，本地开发不缓存）
+    if ("serviceWorker" in navigator && location.protocol === "https:") {
+      window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+    }
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();
 })();
