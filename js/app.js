@@ -185,7 +185,7 @@
     for (const f of imgEls) {
       const b64 = await fileToDataUrl(f);
       images.push({ name: f.name, dataUrl: b64 });
-      try { const up = await Store.uploadFile(`${studentId}/enroll/${ts}-${f.name}`, f); paperPaths.push(up.path); }
+      try { const up = await Store.uploadFile(`${Store.getUid()}/enroll/${studentId}-${ts}-${f.name}`, f); paperPaths.push(up.path); }
       catch (e) { console.warn("试卷上传失败（不影响批阅）", e); }
     }
     toast("AI 批阅中…");
@@ -393,3 +393,4 @@
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();
 })();
+
