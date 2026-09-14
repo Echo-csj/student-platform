@@ -79,11 +79,6 @@ body {
 .nav-item svg { width: 17px; height: 17px; flex: none; }
 .sidebar-foot { margin-top: auto; padding-top: 16px; border-top: 1px solid var(--border); }
 
-/* 侧栏账户区：登录态/退出移入左侧栏底部（原为右上角悬浮条，会遮挡内容） */
-.sidebar-foot .sf-mail { font-size: 12px; color: var(--text-muted, #71717a); padding: 2px 4px 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sidebar-foot .sf-logout { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 8px 12px; margin-top: 2px; border: 1px solid var(--border, #e4e4e7); border-radius: var(--radius-sm, 8px); background: var(--bg, #fff); color: var(--indigo, #4F46E5); font-size: 13px; font-weight: 500; cursor: pointer; }
-.sidebar-foot .sf-logout:hover { background: var(--bg-muted, #f4f4f5); color: var(--red, #dc2626); }
-
 .main { display: flex; flex-direction: column; min-width: 0; }
 .topbar {
   height: 56px; background: color-mix(in srgb, var(--bg) 85%, transparent);
@@ -94,7 +89,21 @@ body {
 .topbar h1 { font-size: 15px; font-weight: 620; margin: 0; letter-spacing: -.01em; }
 .topbar .crumb { color: var(--text-muted); font-size: 12.5px; margin-left: 8px; }
 .top-actions { display: flex; gap: 8px; align-items: center; }
-.content { padding: 26px 28px 60px; max-width: 1180px; width: 100%; }
+.content { padding: 26px 28px 60px; max-width: 1180px; width: 100%; margin: 0 auto; }
+
+/* 移动端底部导航（<900px 显示，替代隐藏的侧边栏） */
+.mobile-nav { display: none; }
+.mobile-nav {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; height: 56px;
+  background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(8px);
+  border-top: 1px solid var(--border);
+}
+.mnav-item {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  font-size: 10.5px; color: var(--text-muted); cursor: pointer; border-top: 2px solid transparent;
+}
+.mnav-item svg { width: 19px; height: 19px; }
+.mnav-item.active { color: var(--indigo); border-top-color: var(--indigo); }
 
 /* Buttons */
 .btn {
@@ -124,7 +133,7 @@ body {
 .grid { display: grid; gap: 18px; }
 .grid-2 { grid-template-columns: repeat(2, minmax(0,1fr)); }
 .grid-3 { grid-template-columns: repeat(3, minmax(0,1fr)); }
-@media (max-width: 900px){ .grid-2,.grid-3 { grid-template-columns: 1fr; } .app { grid-template-columns: 1fr; } .sidebar { display:none; } }
+@media (max-width: 900px){ .grid-2,.grid-3 { grid-template-columns: 1fr; } .app { grid-template-columns: 1fr; } .sidebar { display:none; } .mobile-nav { display:flex; } .content { padding-bottom: 76px; } }
 
 /* Stat tiles */
 .stat { padding: 16px 18px; }

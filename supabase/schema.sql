@@ -175,6 +175,18 @@ alter table public.calendar_db enable row level security;
 create policy "owner calendar_db" on public.calendar_db for all
   using (owner_id = auth.uid()) with check (owner_id = auth.uid());
 
+-- ============ 文件存储桶（用户自有项目内的 Storage，非第三方外部服务） ============
+-- 上传的试卷图片 / 教材 / 校历文件均保存在本桶，路径前缀为 owner_id，受下行 RLS 隔离。
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('student-files', 'student-files', true, 15728640, null)  -- 上限 15MB
+on conflict (id) do nothing;
+
+-- 仅本人可访问自己 owner_id 前缀下的对象（路径第一段即 owner_id）
+drop policy if exists "own files" on storage.objects;
+create policy "own files" on storage.objects for all
+  using (bucket_id = 'student-files' and (storage.foldername(name))[1] = auth.uid()::text)
+  with check (bucket_id = 'student-files' and (storage.foldername(name))[1] = auth.uid()::text);
+
 -- ============ 索引 ============
 create index if not exists idx_students_owner on public.students(owner_id);
 create index if not exists idx_assess_owner on public.assessments(owner_id, student_id);

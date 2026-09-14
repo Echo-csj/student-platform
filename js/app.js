@@ -180,17 +180,26 @@
     const s = (await Store.list("students")).find((x) => x.id === studentId);
     const imgEls = $("#enImgs").files; const ans = $("#enAns").value.trim();
     if (!imgEls.length) return toast("请选择试卷图片");
+    const ts = Date.now();
+    const images = []; const paperPaths = [];
+    for (const f of imgEls) {
+      const b64 = await fileToDataUrl(f);
+      images.push({ name: f.name, dataUrl: b64 });
+      try { const up = await Store.uploadFile(`${studentId}/enroll/${ts}-${f.name}`, f); paperPaths.push(up.path); }
+      catch (e) { console.warn("试卷上传失败（不影响批阅）", e); }
+    }
     toast("AI 批阅中…");
     try {
-      const images = [];
-      for (const f of imgEls) { const b64 = await fileToDataUrl(f); images.push({ name: f.name, dataUrl: b64 }); }
       const res = await AI.gradePaper({ images, answerText: ans, studentName: s ? s.name : "", subject: s ? s.subject : "" });
       const rows = (res.details || []).map((r) => ({ question_no: r.question_no, module: r.module, knowledge_point: r.knowledge_point, cognitive_level: r.cognitive_level, full_score: r.full_score, score: r.score, error_type: r.error_type, note: r.note, data_source: "ai" }));
       const d = Engine.analyze(rows);
-      const a = await Store.upsert("assessments", { student_id: studentId, name: "入学测", date: fmtDate(new Date().toISOString()), type: "enrollment", total_score: res.summary ? res.summary.totalScore : d.total.s, total_full: res.summary ? res.summary.totalFull : d.total.f, source: "ai_graded" });
+      const a = await Store.upsert("assessments", { student_id: studentId, name: "入学测", date: fmtDate(new Date().toISOString()), type: "enrollment", total_score: res.summary ? res.summary.totalScore : d.total.s, total_full: res.summary ? res.summary.totalFull : d.total.f, source: "ai_graded", paper_url: paperPaths.length ? JSON.stringify(paperPaths) : null });
       await Store.setDetails(a.id, rows);
       const diag = await Store.upsert("diagnoses", { student_id: studentId, assessment_id: a.id, kind: "enrollment", report: { rate: d.rate, modules: d.modules, errorTypes: d.errorTypes, knowledge: d.knowledge, total: d.total, lostTotal: d.lostTotal }, suggestions: Engine.genSuggestions(d), plan: Engine.genPlan(d) });
-      renderEnrollReport(d, diag.id, "AI 批阅完成，已保存入学诊断。");
+      const where = Store.getMode() === "supabase"
+        ? "试卷已存入你的 Supabase Storage。"
+        : "（演示模式：图片仅存于本浏览器 IndexedDB，未上传服务器；配置 Supabase 后才会存入你的项目）";
+      renderEnrollReport(d, diag.id, "AI 批阅完成，入学诊断已保存。" + where);
     } catch (err) { toast(err.message || "批阅失败"); }
   }
   function renderEnrollReport(d, diagId, msg) {
@@ -226,7 +235,7 @@
     setCrumb("学期课次规划（一周1次课）");
     const { cur, sel } = await studentSelect(studentId, (v) => (location.hash = "#/plan/" + v));
     const dgs = (await Store.list("diagnoses")).filter((d) => d.student_id === cur && d.kind === "enrollment");
-    const weak = dgs[0] ? dgs[0].report.modules.filter((m) => m.full >= 5).map((m) => m.name) : [];
+    const weak = dgs[0] ? dgs[0].report.modules.filter((m) => m.full >= 5) : [];
     const termOpts = window.TERM_ORDER.map((t) => `<option value="${t}">${window.TERM_SESSIONS[t].label}</option>`).join("");
     $("#topActions").innerHTML = sel;
     $("#view").innerHTML = `<div class="card card-pad"><div class="section-title">学期课程规划</div><div class="row" style="max-width:460px"><label class="fld"><span>学期</span><select id="plTerm">${termOpts}</select></label><label class="fld"><span>课次基数</span><input id="plN" type="number" value="25"></label></div><div class="note mb-12">课频：第一学期 25 次 / 寒假 12 次 / 第二学期 25 次 / 暑期 25 次。可改。</div><button class="btn btn-primary" id="plGen">AI 生成课次规划</button><div id="plOut" class="mt-16"></div></div>`;
@@ -273,8 +282,9 @@
     $("#view").innerHTML = `<div class="card card-pad"><div class="section-title">阶段学情诊断</div><div class="note mb-12">综合该生半学期的学情记录与历次诊断，AI 出具阶段诊断（归因 + 建议 + 计划）。支持自动生成与手动修改。</div><button class="btn btn-primary" id="stGen">AI 生成阶段诊断</button><div id="stOut" class="mt-16"></div></div>`;
     $("#stGen").onclick = async () => {
       toast("生成中…");
-      const allMods = {}; recs.forEach((r) => { if (r.knowledge_diagnosis) r.knowledge_diagnosis.modules.forEach((m) => { allMods[m.name] = (allMods[m.name] || 0) + m.rate; }); });
-      const modules = Object.entries(allMods).map(([k, v]) => ({ name: k, rate: recs.filter((r) => r.knowledge_diagnosis).length ? v / recs.filter((r) => r.knowledge_diagnosis).length : v }));
+      const allMods = {}, cnt = {};
+      recs.forEach((r) => { if (r.knowledge_diagnosis) r.knowledge_diagnosis.modules.forEach((m) => { allMods[m.name] = (allMods[m.name] || 0) + m.rate; cnt[m.name] = (cnt[m.name] || 0) + 1; }); });
+      const modules = Object.entries(allMods).map(([k, v]) => ({ name: k, rate: cnt[k] ? v / cnt[k] : 0 }));
       const r = await AI.stageDiagnosis({ analyze: { modules, errorTypes: [], knowledge: [] }, records: recs });
       const saved = await Store.upsert("diagnoses", { student_id: cur, kind: "stage", report: { rate: r.modules ? avgRate(r.modules) : 0, modules: r.modules || [] }, suggestions: r.suggestions || [], plan: r.plan || [] });
       $("#stOut").innerHTML = `<div class="card card-pad"><div class="section-title">阶段诊断</div><p class="subtle">${esc(r.summary || "")}</p>${r.suggestions ? "<div class='mt-16'>" + r.suggestions.map((s) => `<div class="suggestion"><div class="dot"></div><div><div style="font-weight:550">${esc(s.what || "")}</div><div class="muted" style="font-size:12px">给谁做：${esc(s.who || "")} ｜ 何时验证：${esc(s.when || "")}</div></div></div>`).join("") + "</div>" : ""}${r.plan ? "<div class='mt-16 section-title'>阶段计划</div>" + r.plan.map((w) => `<div class="plan-week"><div class="wk">${esc(w.week || "")} · ${esc(w.title || "")}</div><div class="subtle" style="font-size:12px">${esc(w.focus || "")}</div></div>`).join("") : ""}</div>`;
@@ -317,7 +327,7 @@
         <label class="fld"><span>内容（知识点明细文本）</span><textarea id="kContent"></textarea></label>
         <label class="fld"><span>或上传文件（教材/Excel 等）</span><input type="file" id="kFile"></label>
         <button class="btn btn-primary btn-sm" id="kAdd">入库</button>
-        <div class="mt-16"><div id="kList">${kdb.map((k) => `<div class="suggestion"><div class="dot"></div><div><div style="font-weight:550">${esc(k.title)}</div><div class="muted" style="font-size:12px">${esc(k.subject || "")} ${esc(k.grade_band || "")}</div></div></div>`).join("") || '<p class="muted">空</p>'}</div></div>
+        <div class="mt-16"><div id="kList">${kdb.map((k) => `<div class="suggestion"><div class="dot"></div><div><div style="font-weight:550">${esc(k.title)}</div><div class="muted" style="font-size:12px">${esc(k.subject || "")} ${esc(k.grade_band || "")}</div>${k.file_url ? `<div class="mono" style="font-size:11px;color:var(--indigo);margin-top:3px">📎 ${esc(k.file_url)}</div>` : ""}</div></div>`).join("") || '<p class="muted">空</p>'}</div></div>
       </div>
       <div class="card card-pad"><div class="section-title">校历库（考试预判依据）</div>
         <label class="fld"><span>标题</span><input id="cTitle"></label>
@@ -327,23 +337,32 @@
         <div class="mt-16"><div id="cList">${cdb.map((c) => `<div class="suggestion"><div class="dot"></div><div><div style="font-weight:550">${esc(c.title)}</div></div></div>`).join("") || '<p class="muted">空</p>'}</div></div>
       </div>
     </div>`;
-    $("#kAdd").onclick = async () => { const f = $("#kFile").files[0]; await Store.upsert("knowledge_db", { subject: $("#kSub").value, grade_band: $("#kGrade").value, title: $("#kTitle").value || (f ? f.name : "未命名"), content: $("#kContent").value, file_url: f ? f.name : "" }); toast("已入库"); viewDB(); };
-    $("#cAdd").onclick = async () => { const f = $("#cFile").files[0]; await Store.upsert("calendar_db", { title: $("#cTitle").value || (f ? f.name : "未命名"), content: $("#cContent").value, file_url: f ? f.name : "" }); toast("已入库"); viewDB(); };
+    $("#kAdd").onclick = async () => { const f = $("#kFile").files[0]; let fileUrl = null; if (f) { try { const up = await Store.uploadFile(`${Store.getUid()}/kb/${Date.now()}-${f.name}`, f); fileUrl = up.path; } catch (e) { toast("文件上传失败：" + (e.message || e)); } } await Store.upsert("knowledge_db", { subject: $("#kSub").value, grade_band: $("#kGrade").value, title: $("#kTitle").value || (f ? f.name : "未命名"), content: $("#kContent").value, file_url: fileUrl }); toast("已入库" + (fileUrl ? "（文件已存至你的存储）" : (f ? "（未配置 Supabase，文件仅本浏览器）" : ""))); viewDB(); };
+    $("#cAdd").onclick = async () => { const f = $("#cFile").files[0]; let fileUrl = null; if (f) { try { const up = await Store.uploadFile(`${Store.getUid()}/calendar/${Date.now()}-${f.name}`, f); fileUrl = up.path; } catch (e) { toast("文件上传失败：" + (e.message || e)); } } await Store.upsert("calendar_db", { title: $("#cTitle").value || (f ? f.name : "未命名"), content: $("#cContent").value, file_url: fileUrl }); toast("已入库" + (fileUrl ? "（文件已存至你的存储）" : (f ? "（未配置 Supabase，文件仅本浏览器）" : ""))); viewDB(); };
+  }
+
+  // ================= 认证 =================
+  async function maybeAuthGate() {
+    if (Store.getMode() !== "supabase") return false;
+    const u = await Store.getUser();
+    if (u) return false;
+    $("#view").innerHTML = `<div class="empty" style="max-width:380px;margin:80px auto"><h3>登录以使用学员管理平台</h3><p class="muted">已检测到 Supabase 配置，请登录（数据受行级权限保护）。</p>
+      <input id="auEmail" placeholder="邮箱" style="margin-bottom:10px"><input id="auPw" type="password" placeholder="密码" style="margin-bottom:10px">
+      <div class="flex gap-8" style="justify-content:center"><button class="btn btn-primary" id="auIn">登录</button><button class="btn btn-ghost" id="auUp">注册</button></div></div>`;
+    $("#auIn").onclick = async () => { try { await Store.signIn($("#auEmail").value, $("#auPw").value); toast("已登录"); router(); } catch (e) { toast(e.message); } };
+    $("#auUp").onclick = async () => { try { await Store.signUp($("#auEmail").value, $("#auPw").value, "教师"); toast("注册成功，请查收验证邮件"); } catch (e) { toast(e.message); } };
+    return true;
   }
 
   // ================= 路由 =================
-  function setActive(nav) { $$(".nav-item[data-nav]").forEach((n) => n.classList.toggle("active", n.dataset.nav === nav)); }
+  function setActive(nav) { $$(".nav-item[data-nav],.mnav-item[data-nav]").forEach((n) => n.classList.toggle("active", n.dataset.nav === nav)); }
   function setCrumb(t) { $("#pageTitle").textContent = NAV.find((n) => location.hash.includes("/" + n.id) || (location.hash === "#/" + n.id))?.label || "学员管理平台"; $("#pageCrumb").textContent = t; }
   async function router() {
     const hash = location.hash || "#/students";
     const parts = hash.replace(/^#\//, "").split("/");
     const nav = parts[0] || "students";
     setActive(nav);
-    // 已接入 Supabase 但未登录：阻止渲染内部数据，交由全屏登录门接管
-    if (Store.getMode() === "supabase") {
-      const u = await Store.getUser();
-      if (!u) { window.dispatchEvent(new Event("sp:needs-auth")); return; }
-    }
+    if (await maybeAuthGate()) return;
     if (nav === "enroll") return viewEnroll(parts[1]);
     if (nav === "suggest") return viewSuggest(parts[1]);
     if (nav === "plan") return viewPlan(parts[1]);
@@ -357,18 +376,16 @@
   // ================= 初始化 =================
   async function init() {
     await Store.init();
-    document.documentElement.setAttribute("data-theme", "light");
-    $("#themeToggle").onclick = () => { const c = document.documentElement.getAttribute("data-theme"); const n = c === "dark" ? "light" : "dark"; document.documentElement.setAttribute("data-theme", n); };
-    $("#exportAll").onclick = () => toast(Store.getMode() === "supabase" ? "数据已保存在自建 Supabase（受 owner 行级权限保护）" : "演示模式：数据存于本浏览器");
+    const savedTheme = (localStorage.getItem("sp_theme") || "light");
+    document.documentElement.setAttribute("data-theme", savedTheme);
+    $("#themeToggle").onclick = () => { const c = document.documentElement.getAttribute("data-theme"); const n = c === "dark" ? "light" : "dark"; document.documentElement.setAttribute("data-theme", n); localStorage.setItem("sp_theme", n); toast(n === "dark" ? "已切换为深色" : "已切换为浅色"); };
+    $("#exportAll").onclick = () => toast("演示模式：数据存于本浏览器；接入 Supabase 后可在多端同步");
     $$(".nav-item[data-nav]").forEach((n) => (n.onclick = () => { const id = n.dataset.nav; location.hash = id === "students" ? "#/students" : "#/" + id; }));
+    const mn = $("#mobileNav");
+    if (mn) { mn.innerHTML = NAV.map((n) => `<div class="mnav-item" data-nav="${n.id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${n.icon}</svg><span>${n.label}</span></div>`).join(""); $$(".mnav-item[data-nav]").forEach((n) => (n.onclick = () => { const id = n.dataset.nav; location.hash = id === "students" ? "#/students" : "#/" + id; })); }
     window.addEventListener("hashchange", router);
-    window.SP = { render: router };   // 供 auth-gate.js 解锁后驱动渲染
-    // 演示模式（未配置后端）：直接渲染；已接入 Supabase：交给全屏登录门控制渲染
-    if (Store.getMode() !== "supabase") {
-      await seedIfEmpty();
-      router();
-    }
-    // 注意：supabase 模式下不在此渲染，等待 auth-gate 判定登录态后驱动渲染
+    await seedIfEmpty();
+    router();
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();
 })();

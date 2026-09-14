@@ -41,9 +41,22 @@
 
 - 建 10 张表：`profiles / students / assessments / exam_details / diagnoses / course_plans / learning_records / lesson_logs / knowledge_db / calendar_db`；
 - 开启 **行级安全（RLS）**，策略为「仅本人（`owner_id = auth.uid()`）可读写」；
-- 建 `handle_new_user` 触发器，注册即写入 `profiles`（角色默认 `teacher`）。
+  - 建 `handle_new_user` 触发器，注册即写入 `profiles`（角色默认 `teacher`）；
+  - 创建 **`student-files` Storage 桶**（公开读、单文件上限 15MB），并加 RLS：仅本人可访问 `student-files/{owner_id}/...` 下自己的对象（路径第一段即 `auth.uid()`）。
 
 > 如需多人协作（如校长看全部学员），在 `schema.sql` 末尾把对应表的策略改为包含 `role = 'manager'`，或在控制台手动加 policy。本仓库默认「各账号仅看自己数据」。
+
+### 文件存储说明（服务器侧保存路径）
+
+> 本站是纯静态前端，GitHub Pages **没有服务器、没有可写目录**。所谓「文件存在你自己的服务器存储目录」，在本架构下指 **你自己的 Supabase 项目里的 Storage 桶 `student-files`** —— 这是你创建的项目的云存储，数据归属你的账号，**不是任何第三方网盘或外部文件托管服务**。
+
+- 上传的试卷图片 / 教材 / 校历等文件**保存在 `student-files` 桶内**，桶内 key（即服务器侧路径）约定如下：
+  - 入学试卷：`student-files/{owner_id}/enroll/{时间戳}-{原始文件名}`
+  - 知识点库文件：`student-files/{owner_id}/kb/{时间戳}-{原始文件名}`
+  - 校历库文件：`student-files/{owner_id}/calendar/{时间戳}-{原始文件名}`
+  - 其中 `{owner_id}` 即登录用户 ID，作为路径第一段；RLS 强制 `storage.foldername(name)[1] = auth.uid()`，他人无法读取或写入你的文件。
+- 桶为 public（公开读），但对象路径含 `owner_id` 前缀且写入受 RLS 保护——实际只有本人能上传与删除；公开 URL 也需知道完整路径（不可枚举）。
+- **演示模式（未配置 Supabase）下**：文件不会上传到任何服务器，仅存于**当前浏览器 IndexedDB**（换设备/清缓存即丢失），页面会明确提示「未配置 Supabase，文件仅本浏览器」。接入 Supabase 后即自动改为存入上面这个桶。
 
 ### 步骤 3：填前端配置
 
@@ -129,7 +142,7 @@ student-platform/
 │  ├─ ai.js                   # AI 层：真实函数 or 模板回退
 │  └─ app.js                  # 主逻辑 + 8 视图 + SVG 图表 + 鉴权
 ├─ supabase/
-│  ├─ schema.sql              # 10 张表 + RLS + 触发器
+│  ├─ schema.sql              # 10 张表 + RLS + 触发器 + student-files 存储桶
 │  └─ functions/
 │     ├─ grade-paper/index.ts # 多模态批阅（图片 → 逐题得分）
 │     └─ ai-text/index.ts     # 教学建议/规划/诊断/档案（文本大模型）

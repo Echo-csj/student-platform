@@ -1,5 +1,22 @@
 // 学员管理平台 · 测量学分析引擎（纯前端，供演示模式与图表复用）
 window.Engine = (function () {
+  // RFC4180 风格单行解析：支持双引号字段、字段内逗号、以及转义引号（""）
+  function splitCSVLine(line) {
+    const out = []; let cur = ""; let q = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (q) {
+        if (ch === '"') { if (line[i + 1] === '"') { cur += '"'; i++; } else q = false; }
+        else cur += ch;
+      } else {
+        if (ch === '"') q = true;
+        else if (ch === ",") { out.push(cur); cur = ""; }
+        else cur += ch;
+      }
+    }
+    out.push(cur);
+    return out;
+  }
   function parseExamDetailCSV(text) {
     const lines = text.replace(/\r/g, "").split("\n").filter((l) => l.trim());
     if (!lines.length) return [];
@@ -7,14 +24,14 @@ window.Engine = (function () {
     for (let i = 0; i < Math.min(3, lines.length); i++) {
       if (/question_no|题号|module|模块/.test(lines[i])) { headerIdx = i; break; }
     }
-    const header = lines[headerIdx].split(",").map((h) => h.trim());
+    const header = splitCSVLine(lines[headerIdx]).map((h) => h.trim());
     const col = (names) => header.findIndex((h) => names.includes(h));
     const cQ = col(["question_no", "题号", "qno"]), cM = col(["module", "模块"]), cK = col(["knowledge_point", "知识点", "kp"]);
     const cC = col(["cognitive_level", "认知层级"]), cF = col(["full_score", "满分", "full"]), cS = col(["score", "得分", "s"]);
     const cE = col(["error_type", "错误类型"]), cN = col(["note", "备注"]);
     const rows = [];
     for (let i = headerIdx + 1; i < lines.length; i++) {
-      const c = lines[i].split(",");
+      const c = splitCSVLine(lines[i]);
       const f = parseFloat(c[cF] ?? 0) || 0, s = parseFloat(c[cS] ?? 0) || 0;
       rows.push({ question_no: c[cQ] ?? (i - headerIdx), module: c[cM] ?? "未分类", knowledge_point: c[cK] ?? "未标注", cognitive_level: c[cC] ?? "", full_score: f, score: s, error_type: c[cE] ?? (s < f ? "未标注" : "无"), note: c[cN] ?? "" });
     }
@@ -71,7 +88,8 @@ window.Engine = (function () {
       if (i <= 3) { topic = "入学诊断复盘与基础筛查"; focus = "建立错题本、定位薄弱点"; }
       else if (weakModules && weakModules.length && i % 2 === 0) {
         const m = weakModules[(i / 2 - 1) % weakModules.length];
-        topic = m.name + " 专题讲练"; focus = "该模块得分率提升至 75%+";
+        const mname = (m && typeof m === "object" && m.name) ? m.name : m;
+        topic = mname + " 专题讲练"; focus = "该模块得分率提升至 75%+";
       } else { topic = "综合训练与限时模拟"; focus = "提速 + 规范"; }
       sessions.push({ seq: i, topic, focus, status: "planned" });
     }

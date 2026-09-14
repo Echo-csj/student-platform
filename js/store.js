@@ -5,8 +5,40 @@ window.Store = (function () {
   let mode = "demo";   // 'supabase' | 'demo'
   let uid = "demo";
 
+  const BUCKET = "student-files"; // Supabase Storage 桶（用户自有项目内）
+
   function isConfigured() {
     return !!(cfg.SUPABASE_URL && cfg.SUPABASE_ANON_KEY);
+  }
+
+  // ---------- 演示模式文件兜底：IndexedDB（仅本浏览器，非服务器） ----------
+  function idb() {
+    return new Promise((res, rej) => {
+      const r = indexedDB.open("sp_files_v1", 1);
+      r.onupgradeneeded = () => { if (!r.result.objectStoreNames.contains("files")) r.result.createObjectStore("files"); };
+      r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+    });
+  }
+  async function idbPut(key, blob) {
+    const db = await idb();
+    return new Promise((res, rej) => { const tx = db.transaction("files", "readwrite"); tx.objectStore("files").put(blob, key); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); });
+  }
+
+  // 上传文件到「用户自有」存储：Supabase 模式→项目 Storage 桶；演示模式→本浏览器 IndexedDB
+  // 返回 { path, url, demo }。path 即服务器侧保存路径（桶内 key）。
+  async function uploadFile(path, file) {
+    if (mode !== "supabase" || !sb) {
+      await idbPut(path, file);
+      return { path, url: URL.createObjectURL(file), demo: true };
+    }
+    const { data, error } = await sb.storage.from(BUCKET).upload(path, file, { upsert: true, cacheControl: "3600" });
+    if (error) throw error;
+    const { data: pub } = sb.storage.from(BUCKET).getPublicUrl(data.path);
+    return { path: data.path, url: pub.publicUrl, demo: false };
+  }
+  function fileUrl(path) {
+    if (mode !== "supabase" || !sb) return null;
+    try { return sb.storage.from(BUCKET).getPublicUrl(path).data.publicUrl; } catch { return null; }
   }
 
   async function init() {
@@ -100,6 +132,6 @@ window.Store = (function () {
     init, getMode, getUid, client, isConfigured,
     getUser, signIn, signUp, signOut,
     list, upsert, remove, setDetails, getDetails,
-    uidGen,
+    uploadFile, fileUrl, uidGen,
   };
 })();
