@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>学员管理平台 · 设计系统</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    /* ===== 品牌主色 Indigo ===== */
+    --indigo-50:#eef2ff; --indigo-100:#e0e7ff; --indigo-200:#c7d2fe; --indigo-300:#a5b4fc;
+    --indigo-400:#818cf8; --indigo-500:#6366f1; --indigo-600:#4F46E5; --indigo-700:#4338ca;
+    --indigo-800:#3730a3; --indigo-900:#312e81;
+    /* ===== 中性 Zinc ===== */
+    --zinc-50:#fafafa; --zinc-100:#f4f4f5; --zinc-200:#e4e4e7; --zinc-300:#d4d4d8;
+    --zinc-400:#a1a1aa; --zinc-500:#71717a; --zinc-600:#52525b; --zinc-700:#3f3f46;
+    --zinc-800:#27272a; --zinc-900:#18181b; --zinc-950:#09090b;
+    /* ===== 语义色 ===== */
+    --green:#10b981; --amber:#f59e0b; --red:#ef4444; --sky:#0ea5e9;
+    /* ===== 主题变量（浅色） ===== */
+    --bg:#ffffff; --bg-subtle:#fafafa; --bg-muted:#f4f4f5;
+    --border:#e4e4e7; --border-strong:#d4d4d8;
+    --text:#18181b; --text-subtle:#52525b; --text-muted:#a1a1aa;
+    --indigo:#4F46E5; --indigo-hover:#4338ca; --indigo-soft:#eef2ff;
+    --shadow-sm:0 1px 2px rgba(24,24,27,.04),0 1px 3px rgba(24,24,27,.06);
+    --shadow-md:0 4px 12px rgba(24,24,27,.06),0 2px 4px rgba(24,24,27,.04);
+    --shadow-lg:0 12px 32px rgba(24,24,27,.10);
+    /* ===== 排版 ===== */
+    --font-sans:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
+    --font-mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+    /* ===== 间距（4px 基准） ===== */
+    --s-1:4px; --s-2:8px; --s-3:12px; --s-4:16px; --s-5:20px; --s-6:24px; --s-8:32px; --s-10:40px; --s-12:48px; --s-16:64px;
+    /* ===== 圆角 ===== */
+    --r-sm:6px; --r-md:8px; --r-lg:10px; --r-pill:999px;
+    /* ===== 动效 ===== */
+    --ease-spring:cubic-bezier(.34,1.56,.64,1);
+    --t-fast:150ms ease; --t-norm:220ms ease;
+  }
+  [data-theme="dark"] {
+    --bg:#18181b; --bg-subtle:#1c1c1f; --bg-muted:#27272a;
+    --border:#2e2e33; --border-strong:#3f3f46;
+    --text:#fafafa; --text-subtle:#a1a1aa; --text-muted:#71717a;
+    --indigo:#818cf8; --indigo-hover:#a5b4fc; --indigo-soft:#1e1b4b;
+    --shadow-sm:0 1px 2px rgba(0,0,0,.3); --shadow-md:0 4px 12px rgba(0,0,0,.35); --shadow-lg:0 12px 32px rgba(0,0,0,.45);
+  }
+  * { box-sizing:border-box; }
+  html,body { margin:0; padding:0; }
+  body { font-family:var(--font-sans); background:var(--bg-subtle); color:var(--text); font-size:14px; line-height:1.6; -webkit-font-smoothing:antialiased; }
+
+  /* ===== 布局 ===== */
+  .app { display:grid; grid-template-columns:248px 1fr; min-height:100vh; }
+  .side { background:var(--bg); border-right:1px solid var(--border); padding:var(--s-5) var(--s-3); position:sticky; top:0; height:100vh; overflow-y:auto; display:flex; flex-direction:column; gap:var(--s-1); }
+  .brand { display:flex; align-items:center; gap:var(--s-2); padding:var(--s-1) var(--s-2) var(--s-4); }
+  .brand .mk { width:30px; height:30px; border-radius:var(--r-md); background:linear-gradient(135deg,var(--indigo-600),var(--sky)); display:grid; place-items:center; color:#fff; font-weight:700; }
+  .navlabel { font-size:10.5px; text-transform:uppercase; letter-spacing:.08em; color:var(--text-muted); padding:var(--s-3) var(--s-2) var(--s-1); }
+  .navitem { display:flex; align-items:center; gap:var(--s-2); padding:var(--s-2) var(--s-3); border-radius:var(--r-md); color:var(--text-subtle); font-weight:500; cursor:pointer; border:1px solid transparent; transition:all var(--t-fast); }
+  .navitem:hover { background:var(--bg-muted); color:var(--text); }
+  .navitem.active { background:var(--indigo-soft); color:var(--indigo); border-color:color-mix(in srgb,var(--indigo) 18%,transparent); }
+  .main { display:flex; flex-direction:column; min-width:0; }
+  .topbar { height:56px; background:color-mix(in srgb,var(--bg) 88%,transparent); backdrop-filter:blur(8px); border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; padding:0 var(--s-6); position:sticky; top:0; z-index:20; }
+  .topbar h1 { font-size:15px; font-weight:620; margin:0; }
+  .content { padding:var(--s-8); max-width:1120px; width:100%; margin:0 auto; }
+  section { scroll-margin-top:72px; margin-bottom:var(--s-12); }
+  .h2 { font-size:22px; font-weight:680; letter-spacing:-.01em; margin:0 0 var(--s-2); }
+  .h3 { font-size:15px; font-weight:620; margin:var(--s-6) 0 var(--s-3); display:flex; align-items:center; gap:var(--s-2); }
+  .h3::before { content:''; width:3px; height:15px; background:var(--indigo); border-radius:2px; }
+  .lede { color:var(--text-subtle); max-width:760px; margin:0 0 var(--s-4); }
+  .card { background:var(--bg); border:1px solid var(--border); border-radius:var(--r-lg); box-shadow:var(--shadow-sm); padding:var(--s-6); }
+  .grid2 { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:var(--s-4); }
+  .grid3 { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:var(--s-4); }
+  .grid4 { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:var(--s-4); }
+  .muted { color:var(--text-muted); }
+  .sub { color:var(--text-subtle); }
+
+  /* ===== 色彩 swatch ===== */
+  .sw { border:1px solid var(--border); border-radius:var(--r-md); overflow:hidden; }
+  .sw .chip { height:60px; }
+  .sw .meta { padding:var(--s-2) var(--s-3); font-size:12px; }
+  .sw .meta b { font-family:var(--font-mono); font-weight:600; }
+  .sw .meta .u { color:var(--text-muted); display:block; margin-top:2px; }
+
+  /* ===== 字体 ===== */
+  .type-row { display:flex; align-items:baseline; gap:var(--s-4); padding:var(--s-3) 0; border-bottom:1px solid var(--border); }
+  .type-row .sz { font-family:var(--font-mono); color:var(--text-muted); width:64px; flex:none; }
+  .type-row .ex { flex:1; }
+
+  /* ===== 间距 / 圆角 / 阴影 ===== */
+  .sp-box { width:100%; height:28px; background:var(--indigo-600); border-radius:var(--r-sm); }
+  .rk { border:1px solid var(--border-strong); border-radius:var(--r-lg); background:var(--bg); }
+
+  /* ===== 组件 ===== */
+  .btn { display:inline-flex; align-items:center; gap:var(--s-2); font-family:inherit; font-size:13px; font-weight:550; padding:var(--s-2) var(--s-4); border-radius:var(--r-md); border:1px solid var(--border-strong); background:var(--bg); color:var(--text); cursor:pointer; transition:all var(--t-fast); }
+  .btn:hover { border-color:var(--text-muted); box-shadow:var(--shadow-sm); }
+  .btn-primary { background:var(--indigo-600); border-color:var(--indigo-600); color:#fff; }
+  .btn-primary:hover { background:var(--indigo-hover); border-color:var(--indigo-hover); transform:translateY(-1px); box-shadow:var(--shadow-md); }
+  .btn-ghost { border-color:transparent; background:transparent; color:var(--text-subtle); }
+  .btn-ghost:hover { background:var(--bg-muted); }
+  .btn-sm { padding:var(--s-1) var(--s-3); font-size:12px; }
+  .btn-danger { color:var(--red); border-color:color-mix(in srgb,var(--red) 30%,var(--border)); }
+  .btn-danger:hover { background:color-mix(in srgb,var(--red) 8%,var(--bg)); }
+  .input,select,textarea { width:100%; font-family:inherit; font-size:13.5px; color:var(--text); background:var(--bg); border:1px solid var(--border-strong); border-radius:var(--r-md); padding:var(--s-3); transition:border-color var(--t-fast),box-shadow var(--t-fast); }
+  .input:focus,select:focus,textarea:focus { outline:none; border-color:var(--indigo); box-shadow:0 0 0 3px var(--indigo-soft); }
+  textarea { resize:vertical; min-height:84px; }
+  .field { margin-bottom:var(--s-3); }
+  .field > span { display:block; font-size:12.5px; color:var(--text-subtle); margin-bottom:var(--s-1); font-weight:500; }
+  .tag { display:inline-flex; align-items:center; gap:var(--s-1); font-size:11.5px; font-weight:550; padding:2px var(--s-3); border-radius:var(--r-pill); background:var(--bg-muted); color:var(--text-subtle); }
+  .tag-indigo { background:var(--indigo-soft); color:var(--indigo); }
+  .chip { display:inline-block; padding:2px var(--s-3); border-radius:var(--r-sm); font-size:12px; font-family:var(--font-mono); }
+  .chip-green{background:color-mix(in srgb,var(--green) 12%,var(--bg));color:#047857;}
+  .chip-amber{background:color-mix(in srgb,var(--amber) 14%,var(--bg));color:#b45309;}
+  .chip-red{background:color-mix(in srgb,var(--red) 12%,var(--bg));color:var(--red);}
+  table.tbl { width:100%; border-collapse:collapse; font-size:13px; }
+  table.tbl th,table.tbl td { text-align:left; padding:var(--s-3); border-bottom:1px solid var(--border); }
+  table.tbl th { font-size:11.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-muted); font-weight:600; }
+  table.tbl tbody tr:hover { background:var(--bg-subtle); }
+  .num { text-align:right; font-family:var(--font-mono); }
+  .bar { height:8px; border-radius:var(--r-pill); background:var(--bg-muted); overflow:hidden; }
+  .bar > i { display:block; height:100%; background:var(--indigo-600); border-radius:var(--r-pill); }
+  .modal-back { position:fixed; inset:0; background:rgba(24,24,27,.45); display:grid; place-items:center; z-index:100; padding:var(--s-4); }
+  .modal { background:var(--bg); border-radius:14px; box-shadow:var(--shadow-lg); width:100%; max-width:480px; overflow:hidden; }
+  .modal .mh { padding:var(--s-4) var(--s-5); border-bottom:1px solid var(--border); font-weight:620; }
+  .modal .mb { padding:var(--s-5); }
+  .modal .mf { padding:var(--s-3) var(--s-5); border-top:1px solid var(--border); display:flex; justify-content:flex-end; gap:var(--s-2); }
+  .toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:var(--text); color:var(--bg); padding:var(--s-3) var(--s-4); border-radius:var(--r-md); font-size:13px; box-shadow:var(--shadow-lg); z-index:200; }
+  .empty { text-align:center; padding:var(--s-10) var(--s-4); color:var(--text-muted); }
+  .empty .ic { width:44px; height:44px; opacity:.4; margin:0 auto var(--s-3); }
+  .stat { padding:var(--s-4) var(--s-5); }
+  .stat .l { font-size:12px; color:var(--text-muted); }
+  .stat .v { font-size:26px; font-weight:680; font-family:var(--font-mono); letter-spacing:-.02em; margin-top:var(--s-1); }
+  .demo-row { display:flex; gap:var(--s-3); flex-wrap:wrap; align-items:center; }
+  .callout { font-size:12px; color:var(--text-subtle); background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--r-md); padding:var(--s-3) var(--s-4); margin-top:var(--s-3); }
+
+  @media (max-width:900px){
+    .app { grid-template-columns:1fr; }
+    .side { display:none; }
+    .topnav { display:flex; gap:var(--s-1); overflow-x:auto; padding:0 var(--s-4); border-bottom:1px solid var(--border); background:var(--bg); position:sticky; top:56px; z-index:19; }
+    .topnav .navitem { white-space:nowrap; border-radius:0; border-bottom:2px solid transparent; }
+    .topnav .navitem.active { border-bottom-color:var(--indigo); }
+    .content { padding:var(--s-5); }
+    .grid2,.grid3,.grid4 { grid-template-columns:1fr; }
+  }
+  .topnav { display:none; }
+  @media (max-width:900px){ .topnav { display:flex; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand"><div class="mk">学</div><div><div style="font-weight:650">学员管理平台</div><div class="muted" style="font-size:11px">Design System</div></div></div>
+    <div class="navlabel">设计规范</div>
+    <div class="navitem active" data-s="overview">概览与原则</div>
+    <div class="navitem" data-s="color">色彩系统</div>
+    <div class="navitem" data-s="type">字体排印</div>
+    <div class="navitem" data-s="space">间距·圆角·阴影</div>
+    <div class="navitem" data-s="comp">组件库</div>
+    <div class="navitem" data-s="screen">示例界面</div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <h1>设计系统 · UI Designer</h1>
+      <button class="btn btn-sm" id="theme">切换深色 / 浅色</button>
+    </header>
+    <nav class="topnav" id="topnav">
+      <div class="navitem active" data-s="overview">概览</div>
+      <div class="navitem" data-s="color">色彩</div>
+      <div class="navitem" data-s="type">字体</div>
+      <div class="navitem" data-s="space">间距</div>
+      <div class="navitem" data-s="comp">组件</div>
+      <div class="navitem" data-s="screen">示例</div>
+    </nav>
+
+    <div class="content">
+      <!-- 概览 -->
+      <section id="overview">
+        <h2 class="h2">概览与设计原则</h2>
+        <p class="lede">本设计系统服务于「学员管理平台」六步闭环（入学诊断 → 教学建议 → 课程规划 → 学情记录 → 阶段诊断 → 成长档案）。视觉语言延续你既定的 <b>Linear 风格</b>：纯白底、Zinc 灰阶、Indigo 单点强调，克制而清爽。</p>
+        <div class="grid3">
+          <div class="card"><div class="h3" style="margin-top:0">克制 · 单点强调</div><p class="sub" style="margin:0">全站只用 Indigo `#4F46E5` 一个强调色，其余皆为中性灰阶；重要操作才上色，避免视觉噪音。</p></div>
+          <div class="card"><div class="h3" style="margin-top:0">等宽数字 · 数据可读</div><p class="sub" style="margin:0">得分率、分数等数值统一用 JetBrains Mono，对齐整齐、一眼可比对，符合学情场景。</p></div>
+          <div class="card"><div class="h3" style="margin-top:0">小圆角 · 弹簧微动</div><p class="sub" style="margin:0">圆角 6–10px；hover 用弹簧缓动上浮 + 阴影，反馈明确但不喧宾夺主。</p></div>
+        </div>
+        <div class="callout">♿ <b>无障碍基线：</b>正文/强调文字对比度 ≥ 4.5:1（WCAG AA）；交互元素最小点击区 ≥ 44px；深浅色双主题；尊重系统「减少动态效果」偏好。</div>
+      </section>
+
+      <!-- 色彩 -->
+      <section id="color">
+        <h2 class="h2">色彩系统</h2>
+        <p class="lede">主色 Indigo 用于强调与品牌；Zinc 中性色承担 90% 的界面；语义色（绿/琥珀/红/天蓝）仅在状态与得分率出现。</p>
+        <div class="h3">品牌主色 · Indigo</div>
+        <div class="grid4" id="indigoSwatches"></div>
+        <div class="h3">中性色 · Zinc</div>
+        <div class="grid4" id="zincSwatches"></div>
+        <div class="h3">语义色</div>
+        <div class="grid4" id="semSwatches"></div>
+      </section>
+
+      <!-- 字体 -->
+      <section id="type">
+        <h2 class="h2">字体排印</h2>
+        <p class="lede">标题与界面用 <b>Inter</b>；数值、代码、日期用 <b>JetBrains Mono</b>。字重 400/500/600/700，行高 1.5–1.6。</p>
+        <div class="card">
+          <div class="type-row"><span class="sz">36</span><span class="ex" style="font-size:36px;font-weight:700">学员成长档案</span></div>
+          <div class="type-row"><span class="sz">24</span><span class="ex" style="font-size:24px;font-weight:680">模块得分率诊断</span></div>
+          <div class="type-row"><span class="sz">18</span><span class="ex" style="font-size:18px;font-weight:600">薄弱知识点专题讲练</span></div>
+          <div class="type-row"><span class="sz">14</span><span class="ex" style="font-size:14px">基于入学诊断的失分归因与建议。</span></div>
+          <div class="type-row"><span class="sz">12</span><span class="ex" style="font-size:12px;color:var(--text-muted)">给谁做：学员本人 ｜ 何时验证：下次随堂测</span></div>
+          <div class="type-row"><span class="sz">mono</span><span class="ex" style="font-family:var(--font-mono);font-size:16px">得分率 55.5% · 失分 49 · 2026-09-02</span></div>
+        </div>
+      </section>
+
+      <!-- 间距 -->
+      <section id="space">
+        <h2 class="h2">间距 · 圆角 · 阴影</h2>
+        <div class="grid2">
+          <div class="card">
+            <div class="h3" style="margin-top:0">间距（4px 基准）</div>
+            <div id="spaceList"></div>
+          </div>
+          <div class="card">
+            <div class="h3" style="margin-top:0">圆角</div>
+            <div class="demo-row" style="margin-bottom:var(--s-4)"><div class="rk" style="width:72px;height:48px;border-radius:var(--r-sm)"></div><span class="muted">6px · 小</span></div>
+            <div class="demo-row" style="margin-bottom:var(--s-4)"><div class="rk" style="width:72px;height:48px;border-radius:var(--r-md)"></div><span class="muted">8px · 中</span></div>
+            <div class="demo-row"><div class="rk" style="width:72px;height:48px;border-radius:var(--r-lg)"></div><span class="muted">10px · 大（卡片）</span></div>
+            <div class="h3">阴影</div>
+            <div class="demo-row" style="margin-bottom:var(--s-3)"><div class="rk" style="width:72px;height:48px;box-shadow:var(--shadow-sm)"></div><span class="muted">sm</span></div>
+            <div class="demo-row" style="margin-bottom:var(--s-3)"><div class="rk" style="width:72px;height:48px;box-shadow:var(--shadow-md)"></div><span class="muted">md</span></div>
+            <div class="demo-row"><div class="rk" style="width:72px;height:48px;box-shadow:var(--shadow-lg)"></div><span class="muted">lg（弹窗）</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 组件 -->
+      <section id="comp">
+        <h2 class="h2">组件库</h2>
+        <div class="card" style="margin-bottom:var(--s-4)">
+          <div class="h3" style="margin-top:0">按钮 Buttons</div>
+          <div class="demo-row"><button class="btn btn-primary">主操作</button><button class="btn">次操作</button><button class="btn btn-ghost">文字按钮</button><button class="btn btn-danger">删除</button><button class="btn btn-primary btn-sm">小号</button></div>
+        </div>
+        <div class="grid2">
+          <div class="card">
+            <div class="h3" style="margin-top:0">表单 Form</div>
+            <div class="field"><span>学员姓名</span><input class="input" placeholder="如 刘英杰" /></div>
+            <div class="field"><span>学科</span><select class="input"><option>英语</option><option>数学</option></select></div>
+            <div class="field"><span>小结</span><textarea placeholder="本次测评整体情况"></textarea></div>
+          </div>
+          <div class="card">
+            <div class="h3" style="margin-top:0">标签 / 状态</div>
+            <div class="demo-row" style="margin-bottom:var(--s-3)"><span class="tag tag-indigo">1V1</span><span class="tag">九年级</span><span class="tag">英语</span></div>
+            <div class="demo-row" style="margin-bottom:var(--s-3)"><span class="chip chip-green">达标 88%</span><span class="chip chip-amber">偏弱 66%</span><span class="chip chip-red">薄弱 41%</span></div>
+            <div class="h3">进度条</div>
+            <div class="bar"><i style="width:72%"></i></div>
+          </div>
+        </div>
+        <div class="card" style="margin-top:var(--s-4)">
+          <div class="h3" style="margin-top:0">表格 Table（学员列表）</div>
+          <table class="tbl"><thead><tr><th>姓名</th><th>年级/学科</th><th>入学</th><th class="num">测评数</th><th class="num">最近得分率</th></tr></thead>
+          <tbody>
+            <tr><td><b>刘英杰</b></td><td>九年级 / 英语</td><td class="muted">2026-09-01</td><td class="num">3</td><td class="num"><span class="chip chip-amber">66.0%</span></td></tr>
+            <tr><td><b>王梓涵</b></td><td>九年级 / 英语</td><td class="muted">2026-09-03</td><td class="num">2</td><td class="num"><span class="chip chip-green">82.3%</span></td></tr>
+          </tbody></table>
+        </div>
+        <div class="grid2" style="margin-top:var(--s-4)">
+          <div class="card">
+            <div class="h3" style="margin-top:0">弹窗 Modal</div>
+            <div class="modal-back" style="position:static"><div class="modal"><div class="mh">确认删除？</div><div class="mb sub">删除后该学员所有诊断记录将一并移除，不可恢复。</div><div class="mf"><button class="btn btn-ghost">取消</button><button class="btn btn-danger">确认删除</button></div></div></div>
+          </div>
+          <div class="card">
+            <div class="h3" style="margin-top:0">空状态 / 统计卡</div>
+            <div class="empty"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg><p>还没有学员，点击右上角新增。</p></div>
+            <div class="grid2" style="margin-top:var(--s-3)"><div class="stat card"><div class="l">总得分率</div><div class="v">66.0<small style="font-size:13px">%</small></div></div><div class="stat card"><div class="l">失分</div><div class="v">49</div></div></div>
+          </div>
+        </div>
+        <div class="callout">Toast：操作后右下角浮出轻提示（如「已保存」「AI 批阅完成」），2.2s 自动消失，不阻断操作。</div>
+      </section>
+
+      <!-- 示例界面 -->
+      <section id="screen">
+        <h2 class="h2">示例界面 · 学员列表 + 入学诊断</h2>
+        <p class="lede">以下用本系统的真实组件拼出一个典型页面，演示令牌与组件在实际场景中的统一表现（桌面双列、移动端自动堆叠）。</p>
+        <div class="card">
+          <div class="h3" style="margin-top:0">学员 · 刘英杰</div>
+          <div class="grid3" style="margin-bottom:var(--s-4)">
+            <div class="stat"><div class="l">总得分率</div><div class="v" style="color:var(--amber)">55.5<small>%</small></div></div>
+            <div class="stat"><div class="l">失分</div><div class="v">49<small> 分</small></div></div>
+            <div class="stat"><div class="l">薄弱模块</div><div class="v" style="font-size:20px">完形填空</div></div>
+          </div>
+          <div class="h3">模块得分率</div>
+          <div id="modBars"></div>
+        </div>
+        <div class="card" style="margin-top:var(--s-4)">
+          <div class="h3" style="margin-top:0">自动教学建议（可编辑）</div>
+          <div style="display:flex;gap:var(--s-3);padding:var(--s-3) 0;border-bottom:1px dashed var(--border)"><div style="width:8px;height:8px;border-radius:50%;background:var(--indigo);margin-top:7px;flex:none"></div><div><div style="font-weight:550">知识筛查专项：针对失分最高的「冠词/介词」做听写默写，每周 8–10 个</div><div class="muted" style="font-size:12px">给谁做：学员本人 + 家长每日监督 ｜ 何时验证：下次随堂测正确率</div></div></div>
+          <div style="display:flex;gap:var(--s-3);padding:var(--s-3) 0"><div style="width:8px;height:8px;border-radius:50%;background:var(--indigo);margin-top:7px;flex:none"></div><div><div style="font-weight:550">模块突破：「完形填空」当前 41%，目标提升至 60%</div><div class="muted" style="font-size:12px">给谁做：1V1 针对性讲练 ｜ 何时验证：下次测评模块得分率</div></div></div>
+          <div class="demo-row" style="justify-content:flex-end;margin-top:var(--s-3)"><button class="btn btn-primary btn-sm">导出 Markdown</button></div>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script>
+  // 主题：读取/写入 localStorage，与线上 app 一致
+  document.documentElement.setAttribute("data-theme", localStorage.getItem("sp_theme") || "light");
+  document.getElementById("theme").onclick = () => {
+    const n = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", n); localStorage.setItem("sp_theme", n);
+  };
+
+  // 导航高亮 + 锚点滚动
+  function setActive(s){ document.querySelectorAll(".navitem").forEach(n=>n.classList.toggle("active", n.dataset.s===s)); }
+  document.querySelectorAll(".navitem").forEach(n=>n.onclick=()=>{ const s=n.dataset.s; setActive(s); document.getElementById(s).scrollIntoView({behavior:"smooth"}); });
+  const ids=["overview","color","type","space","comp","screen"];
+  window.addEventListener("scroll",()=>{ let cur=ids[0]; ids.forEach(i=>{ if(document.getElementById(i).getBoundingClientRect().top<120) cur=i; }); setActive(cur); }, {passive:true});
+
+  // 生成色板
+  function sw(name, hex, usage){ return `<div class="sw"><div class="chip" style="background:${hex}"></div><div class="meta"><b>${name}</b><span class="u">${hex}</span>${usage?`<span class="u">${usage}</span>`:""}</div></div>`; }
+  const indigo={50:"#eef2ff",100:"#e0e7ff",200:"#c7d2fe",300:"#a5b4fc",400:"#818cf8",500:"#6366f1",600:"#4F46E5",700:"#4338ca",800:"#3730a3",900:"#312e81"};
+  document.getElementById("indigoSwatches").innerHTML = Object.entries(indigo).map(([k,v])=>sw("indigo-"+k, v, k==="600"?"主色/按钮":(k==="700"?"hover":""))).join("");
+  const zinc={50:"#fafafa",100:"#f4f4f5",200:"#e4e4e7",300:"#d4d4d8",400:"#a1a1aa",500:"#71717a",600:"#52525b",700:"#3f3f46",800:"#27272a",900:"#18181b"};
+  document.getElementById("zincSwatches").innerHTML = Object.entries(zinc).map(([k,v])=>sw("zinc-"+k, v, (k==="50"?"背景":(k==="900"?"正文":(k==="400"?"占位/辅助":""))))).join("");
+  document.getElementById("semSwatches").innerHTML = [sw("green #10b981","#10b981","达标"),sw("amber #f59e0b","#f59e0b","偏弱"),sw("red #ef4444","#ef4444","薄弱"),sw("sky #0ea5e9","#0ea5e9","信息")].join("");
+
+  // 间距列表
+  const sp={4:"--s-1",8:"--s-2",12:"--s-3",16:"--s-4",24:"--s-6",32:"--s-8",48:"--s-12",64:"--s-16"};
+  document.getElementById("spaceList").innerHTML = Object.entries(sp).map(([px,v])=>`<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border)"><div class="sp-box" style="width:${px}px"></div><span class="muted" style="font-family:var(--font-mono);font-size:12px">${px}px · ${v}</span></div>`).join("");
+
+  // 模块得分率示例条
+  const mods=[["单项选择",78],["完形填空",41],["阅读理解",63],["词语运用",55],["阅读与表达",70],["书面表达",48]];
+  document.getElementById("modBars").innerHTML = mods.map(([m,r])=>`<div style="display:flex;align-items:center;gap:12px;margin:10px 0"><div style="width:96px;flex:none" class="sub">${m}</div><div class="bar" style="flex:1"><i style="width:${r}%;background:${r>=80?'var(--green)':r>=60?'var(--amber)':'var(--red)'}"></i></div><div class="num" style="width:54px;flex:none">${r}%</div></div>`).join("");
+</script>
+</body>
+</html>
