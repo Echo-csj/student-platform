@@ -61,6 +61,29 @@
     { id: "db", label: "数据库", icon: '<path d="M3 7l9-4 9 4M3 7v10l9 4 9-4V7"/><path d="M3 12l9 4 9-4"/>' },
   ];
 
+  // ---------- 六步闭环步骤条 ----------
+  const STEPS = [
+    { id: "enroll", label: "入学诊断" },
+    { id: "suggest", label: "教学建议" },
+    { id: "plan", label: "课程规划" },
+    { id: "records", label: "学情记录" },
+    { id: "stage", label: "阶段诊断" },
+    { id: "archive", label: "成长档案" },
+  ];
+  function mountStepper(nav) {
+    const idx = STEPS.findIndex((s) => s.id === nav);
+    if (idx < 0) return;
+    const v = $("#view"); if (!v) return;
+    let bar = $("#stepper");
+    if (!bar) { bar = document.createElement("div"); bar.id = "stepper"; bar.className = "stepper"; v.insertBefore(bar, v.firstChild); }
+    bar.innerHTML = STEPS.map((s, i) => {
+      const cls = i === idx ? " active" : (i < idx ? " done" : "");
+      const dot = i < idx ? "✓" : (i + 1);
+      const line = i < STEPS.length - 1 ? `<div class="step-line ${i < idx ? "done" : ""}"></div>` : "";
+      return `<div class="step${cls}"><div class="step-dot">${dot}</div><span>${s.label}</span></div>${line}`;
+    }).join("");
+  }
+
   // ---------- 种子（演示模式） ----------
   function genLiuDetails() {
     const spec = [
@@ -185,7 +208,7 @@
     for (const f of imgEls) {
       const b64 = await fileToDataUrl(f);
       images.push({ name: f.name, dataUrl: b64 });
-      try { const up = await Store.uploadFile(`${Store.getUid()}/enroll/${studentId}-${ts}-${f.name}`, f); paperPaths.push(up.path); }
+      try { const up = await Store.uploadFile(`${studentId}/enroll/${ts}-${f.name}`, f); paperPaths.push(up.path); }
       catch (e) { console.warn("试卷上传失败（不影响批阅）", e); }
     }
     toast("AI 批阅中…");
@@ -363,14 +386,9 @@
     const nav = parts[0] || "students";
     setActive(nav);
     if (await maybeAuthGate()) return;
-    if (nav === "enroll") return viewEnroll(parts[1]);
-    if (nav === "suggest") return viewSuggest(parts[1]);
-    if (nav === "plan") return viewPlan(parts[1]);
-    if (nav === "records") return viewRecords(parts[1]);
-    if (nav === "stage") return viewStage(parts[1]);
-    if (nav === "archive") return viewArchive(parts[1]);
-    if (nav === "db") return viewDB();
-    return viewStudents();
+    const views = { enroll: viewEnroll, suggest: viewSuggest, plan: viewPlan, records: viewRecords, stage: viewStage, archive: viewArchive, db: viewDB };
+    if (views[nav]) await views[nav](parts[1]); else await viewStudents();
+    mountStepper(nav);
   }
 
   // ================= 初始化 =================
@@ -393,4 +411,3 @@
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();
 })();
-
