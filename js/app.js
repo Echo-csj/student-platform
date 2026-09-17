@@ -9,7 +9,6 @@
   const fmtDate = (d) => (d ? String(d).slice(0, 10) : "");
   const rateColor = (r) => (r >= 0.8 ? "var(--green)" : r >= 0.6 ? "var(--amber)" : "var(--red)");
   const rateChip = (r) => `<span class="chip" style="background:color-mix(in srgb,${rateColor(r)} 14%,var(--bg));color:${rateColor(r)}">${(r * 100).toFixed(1)}% · ${r >= 0.8 ? "达标" : r >= 0.6 ? "偏弱" : "薄弱"}</span>`;
-  let deferredInstall = null;
   function toast(m) { const t = $("#toast"); t.textContent = m; t.classList.add("show"); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), 2200); }
 
   // ---------- 图表 ----------
@@ -49,24 +48,6 @@
   }
   function closeModal() { $("#modalRoot").innerHTML = ""; }
   function downloadText(text, filename) { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" })); a.download = filename; a.click(); URL.revokeObjectURL(a.href); }
-
-  // ---------- PWA 应用内安装 ----------
-  function isIOS() { return /iP(ad|hone|od)/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1); }
-  function showInstallHelp() {
-    const body = isIOS()
-      ? `<p class="subtle" style="font-size:13px;line-height:1.8">iOS / iPadOS 暂不支持一键安装，请：<br>1. 点击浏览器底部「分享」按钮 <span class="kbd">⤴</span><br>2. 选择「添加到主屏幕」<br>3. 命名后点「添加」即可。</p>`
-      : `<p class="subtle" style="font-size:13px;line-height:1.8">若未弹出安装提示，可点击浏览器右上角菜单 <span class="kbd">⋮</span> / <span class="kbd">⋯</span> → 选择「安装应用 / 安装到桌面」。<br>部分浏览器需先访问过本站点、且未处于无痕模式。</p>`;
-    openModal("安装到桌面", body, [{ label: "知道了", cls: "btn-primary", onClick: closeModal }]);
-  }
-  async function doInstall() {
-    if (deferredInstall) {
-      deferredInstall.prompt();
-      try { await deferredInstall.userChoice; } catch (e) {}
-      deferredInstall = null;
-      return;
-    }
-    showInstallHelp();
-  }
 
   // ---------- 导航 ----------
   const NAV = [
@@ -416,9 +397,6 @@
     const savedTheme = (localStorage.getItem("sp_theme") || "light");
     document.documentElement.setAttribute("data-theme", savedTheme);
     $("#themeToggle").onclick = () => { const c = document.documentElement.getAttribute("data-theme"); const n = c === "dark" ? "light" : "dark"; document.documentElement.setAttribute("data-theme", n); localStorage.setItem("sp_theme", n); toast(n === "dark" ? "已切换为深色" : "已切换为浅色"); };
-    $("#installBtn").onclick = doInstall;
-    window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); deferredInstall = e; $("#installBtn")?.classList.add("active"); });
-    window.addEventListener("appinstalled", () => { deferredInstall = null; $("#installBtn")?.classList.remove("active"); toast("已安装到桌面"); });
     $("#exportAll").onclick = () => toast("演示模式：数据存于本浏览器；接入 Supabase 后可在多端同步");
     $$(".nav-item[data-nav]").forEach((n) => (n.onclick = () => { const id = n.dataset.nav; location.hash = id === "students" ? "#/students" : "#/" + id; }));
     const mn = $("#mobileNav");
