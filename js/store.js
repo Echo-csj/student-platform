@@ -43,6 +43,8 @@ window.Store = (function () {
 
   async function init() {
     if (!isConfigured()) { mode = "demo"; return false; }
+    // 已配置：即使后端暂时不可达，也要保留 supabase 模式，让登录框出现并由 signIn 暴露真实错误，
+    // 切勿静默回退 demo（否则用户看到“无后端”却以为是没登录）。
     try {
       if (typeof supabase === "undefined") {
         await new Promise((res, rej) => {
@@ -52,11 +54,14 @@ window.Store = (function () {
         });
       }
       sb = supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
-      const { data } = await sb.auth.getUser();
-      if (data.user) { uid = data.user.id; mode = "supabase"; }
-      else mode = "supabase"; // 已配置但未登录：UI 引导登录
+      const u = await getUser(); // getUser 内部已容错
+      uid = u ? u.id : "demo";
+      mode = "supabase";
       return true;
-    } catch (e) { mode = "demo"; return false; }
+    } catch (e) {
+      mode = "supabase"; // 网络/TLS 异常：保留模式，交给 signIn 报清晰错误
+      return true;
+    }
   }
 
   function getMode() { return mode; }
@@ -79,7 +84,11 @@ window.Store = (function () {
   function uidGen() { return "id_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
   // ---------- Auth (supabase) ----------
-  async function getUser() { if (mode !== "supabase") return null; const { data } = await sb.auth.getUser(); return data.user; }
+  async function getUser() {
+    if (mode !== "supabase" || !sb) return null;
+    try { const { data } = await sb.auth.getUser(); return data.user || null; }
+    catch { return null; }
+  }
   async function signIn(email, pw) { const { data, error } = await sb.auth.signInWithPassword({ email, password }); if (error) throw error; uid = data.user.id; return data.user; }
   async function signUp(email, pw, fullName) { const { data, error } = await sb.auth.signUp({ email, password, options: { data: { full_name: fullName } } }); if (error) throw error; return data.user; }
   async function signOut() { await sb.auth.signOut(); uid = "demo"; }

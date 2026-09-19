@@ -365,15 +365,44 @@
   }
 
   // ================= 认证 =================
+  // 把 Supabase 原始错误翻译成可直接执行的中文提示
+  function authErrMsg(e) {
+    const m = (e && (e.message || String(e))) || "未知错误";
+    if (/email not confirmed/i.test(m)) return "邮箱未验证：自托管 Supabase 通常未配置邮件服务，无法发送验证邮件。请按下方『解决办法』用 SQL 初始化账号密码，或在后台关闭 Confirm email。";
+    if (/invalid login credentials/i.test(m)) return "邮箱或密码错误，请检查后重试。";
+    if (/already (been )?registered/i.test(m)) return "该邮箱已注册，请直接登录；若此前未收到验证邮件，请按下方说明初始化账号密码。";
+    if (/email logins are disabled/i.test(m)) return "该 Supabase 项目未启用邮箱密码登录，请在后台 Authentication → Providers → Email 中开启。";
+    if (/failed to fetch|networkerror|load failed|typeerror|timeout/i.test(m)) return "无法连接认证服务器（supabase.dosworkbench.top）。请确认该 Supabase 服务正在运行、域名可访问且 SSL 证书有效——用浏览器直接打开该地址应能显示 Studio 登录页。";
+    return m;
+  }
+
   async function maybeAuthGate() {
     if (Store.getMode() !== "supabase") return false;
     const u = await Store.getUser();
     if (u) return false;
-    $("#view").innerHTML = `<div class="empty" style="max-width:380px;margin:80px auto"><h3>登录以使用学员管理平台</h3><p class="muted">已检测到 Supabase 配置，请登录（数据受行级权限保护）。</p>
+    const host = (window.APP_CONFIG && window.APP_CONFIG.SUPABASE_URL || "").replace(/^https?:\/\//, "");
+    $("#view").innerHTML = `<div class="empty" style="max-width:440px;margin:56px auto"><h3>登录以使用学员管理平台</h3>
+      <p class="muted">已接入 Supabase（${host || "已配置"}），数据受行级权限保护。</p>
       <input id="auEmail" placeholder="邮箱" style="margin-bottom:10px"><input id="auPw" type="password" placeholder="密码" style="margin-bottom:10px">
-      <div class="flex gap-8" style="justify-content:center"><button class="btn btn-primary" id="auIn">登录</button><button class="btn btn-ghost" id="auUp">注册</button></div></div>`;
-    $("#auIn").onclick = async () => { try { await Store.signIn($("#auEmail").value, $("#auPw").value); toast("已登录"); router(); } catch (e) { toast(e.message); } };
-    $("#auUp").onclick = async () => { try { await Store.signUp($("#auEmail").value, $("#auPw").value, "教师"); toast("注册成功，请查收验证邮件"); } catch (e) { toast(e.message); } };
+      <div class="flex gap-8" style="justify-content:center"><button class="btn btn-primary" id="auIn">登录</button><button class="btn btn-ghost" id="auUp">注册</button></div>
+      <details class="auth-help" style="margin-top:18px;text-align:left">
+        <summary style="cursor:pointer;color:var(--indigo);font-weight:550">登录遇到问题？点此查看解决办法</summary>
+        <div class="muted" style="font-size:13px;line-height:1.75;margin-top:10px">
+          <p><b>① 自托管环境收不到验证邮件？</b>在 Supabase 后台 <b>SQL Editor</b> 执行（把邮箱/密码换成你自己的）：</p>
+          <pre style="white-space:pre-wrap;background:var(--zinc-100);padding:10px;border-radius:8px;font-size:12px;overflow:auto">insert into auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data, aud, role)
+values (gen_random_uuid(), '你的邮箱', crypt('你的密码', gen_salt('bf')), now(), now(), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, 'authenticated', 'authenticated')
+on conflict (email) do update set encrypted_password = crypt('你的密码', gen_salt('bf')), email_confirmed_at = now();</pre>
+          <p><b>② 更省事：</b>后台 <b>Authentication → Providers → Email</b> 关闭 <code>Confirm email</code>，再用上方『注册』即可直接登录。</p>
+          <p><b>③ 提示“无法连接服务器”？</b>说明 <code>supabase.dosworkbench.top</code> 未启动或 SSL 证书失效，请用浏览器直接打开该地址确认 Studio 登录页能显示。</p>
+        </div>
+      </details></div>`;
+    $("#auIn").onclick = async () => { try { await Store.signIn($("#auEmail").value, $("#auPw").value); toast("已登录"); router(); } catch (e) { toast(authErrMsg(e)); } };
+    $("#auUp").onclick = async () => {
+      try {
+        const user = await Store.signUp($("#auEmail").value, $("#auPw").value, "教师");
+        toast("注册成功，请直接登录（若提示邮箱未验证，见下方解决办法）");
+      } catch (e) { toast(authErrMsg(e)); }
+    };
     return true;
   }
 
