@@ -377,29 +377,32 @@
   }
 
   async function maybeAuthGate() {
-    if (Store.getMode() !== "supabase") return false;
+    if (Store.getMode() !== "supabase") { document.body.classList.remove("auth-locked"); return false; }
     const u = await Store.getUser();
-    if (u) return false;
+    if (u) { document.body.classList.remove("auth-locked"); return false; }
+    // 未登录：整站锁定，登录卡片以全屏浮层呈现（导航无法绕过）
+    document.body.classList.add("auth-locked");
+    const gate = $("#authGate");
     const host = (window.APP_CONFIG && window.APP_CONFIG.SUPABASE_URL || "").replace(/^https?:\/\//, "");
-    $("#view").innerHTML = `<div class="empty" style="max-width:440px;margin:56px auto"><h3>登录以使用学员管理平台</h3>
+    gate.innerHTML = `<div class="auth-card"><h3>登录以使用学员管理平台</h3>
       <p class="muted">已接入 Supabase（${host || "已配置"}），数据受行级权限保护。</p>
-      <input id="auEmail" placeholder="邮箱" style="margin-bottom:10px"><input id="auPw" type="password" placeholder="密码" style="margin-bottom:10px">
+      <input id="auEmail" placeholder="邮箱"><input id="auPw" type="password" placeholder="密码">
       <div class="flex gap-8" style="justify-content:center"><button class="btn btn-primary" id="auIn">登录</button><button class="btn btn-ghost" id="auUp">注册</button></div>
-      <details class="auth-help" style="margin-top:18px;text-align:left">
-        <summary style="cursor:pointer;color:var(--indigo);font-weight:550">登录遇到问题？点此查看解决办法</summary>
-        <div class="muted" style="font-size:13px;line-height:1.75;margin-top:10px">
+      <details style="text-align:left">
+        <summary>登录遇到问题？点此查看解决办法</summary>
+        <div class="muted">
           <p><b>① 自托管环境收不到验证邮件？</b>在 Supabase 后台 <b>SQL Editor</b> 执行（把邮箱/密码换成你自己的）：</p>
-          <pre style="white-space:pre-wrap;background:var(--zinc-100);padding:10px;border-radius:8px;font-size:12px;overflow:auto">insert into auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data, aud, role)
+          <pre>insert into auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data, aud, role)
 values (gen_random_uuid(), '你的邮箱', crypt('你的密码', gen_salt('bf')), now(), now(), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, 'authenticated', 'authenticated')
 on conflict (email) do update set encrypted_password = crypt('你的密码', gen_salt('bf')), email_confirmed_at = now();</pre>
           <p><b>② 更省事：</b>后台 <b>Authentication → Providers → Email</b> 关闭 <code>Confirm email</code>，再用上方『注册』即可直接登录。</p>
           <p><b>③ 提示“无法连接服务器”？</b>说明 <code>supabase.dosworkbench.top</code> 未启动或 SSL 证书失效，请用浏览器直接打开该地址确认 Studio 登录页能显示。</p>
         </div>
       </details></div>`;
-    $("#auIn").onclick = async () => { try { await Store.signIn($("#auEmail").value, $("#auPw").value); toast("已登录"); router(); } catch (e) { toast(authErrMsg(e)); } };
+    $("#auIn").onclick = async () => { try { await Store.signIn($("#auEmail").value, $("#auPw").value); document.body.classList.remove("auth-locked"); toast("已登录"); router(); } catch (e) { toast(authErrMsg(e)); } };
     $("#auUp").onclick = async () => {
       try {
-        const user = await Store.signUp($("#auEmail").value, $("#auPw").value, "教师");
+        await Store.signUp($("#auEmail").value, $("#auPw").value, "教师");
         toast("注册成功，请直接登录（若提示邮箱未验证，见下方解决办法）");
       } catch (e) { toast(authErrMsg(e)); }
     };

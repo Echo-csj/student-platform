@@ -242,6 +242,21 @@ td.num, th.num { text-align:right; font-family:var(--font-mono); }
 }
 .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
 .select-student { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+
+/* ============ 全屏登录门禁 ============ */
+/* 未登录时整站隐藏（含侧栏），登录卡片以全屏浮层呈现，导航无法绕过 */
+.auth-gate { position:fixed; inset:0; z-index:2000; display:none; align-items:center; justify-content:center; padding:24px; background:var(--bg); }
+body.auth-locked .app { display:none !important; }
+body.auth-locked #authGate { display:flex; }
+.auth-card { width:100%; max-width:440px; background:var(--bg-subtle); border:1px solid var(--border); border-radius:var(--r-lg); padding:32px 28px; box-shadow:var(--shadow-lg); }
+.auth-card h3 { color:var(--text); font-size:16px; margin:0 0 6px; }
+.auth-card .muted { color:var(--text-muted); font-size:13px; margin:0 0 18px; }
+.auth-card input { width:100%; padding:11px 12px; border:1px solid var(--border-strong); border-radius:var(--r-md); font-size:14px; background:var(--bg); color:var(--text); margin-bottom:10px; transition:border-color .15s, box-shadow .15s; }
+.auth-card input:focus { outline:none; border-color:var(--indigo); box-shadow:0 0 0 3px color-mix(in srgb, var(--indigo) 14%, transparent); }
+.auth-card details { margin-top:18px; }
+.auth-card details summary { cursor:pointer; color:var(--indigo); font-weight:550; font-size:13px; }
+.auth-card details .muted { font-size:13px; line-height:1.75; margin-top:10px; }
+.auth-card pre { white-space:pre-wrap; background:var(--bg); padding:10px; border-radius:8px; border:1px solid var(--border); font-size:12px; overflow:auto; color:var(--text); }
 .chart-box { width:100%; overflow:hidden; }
 .chart-box svg { width:100%; height:auto; display:block; }
 .section-title { font-size:13px; font-weight:650; color:var(--text-subtle); margin:0 0 12px; display:flex; align-items:center; gap:8px; }
