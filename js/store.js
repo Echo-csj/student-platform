@@ -89,8 +89,18 @@ window.Store = (function () {
     try { const { data } = await sb.auth.getUser(); return data.user || null; }
     catch { return null; }
   }
-  async function signIn(email, pw) { const { data, error } = await sb.auth.signInWithPassword({ email, password }); if (error) throw error; uid = data.user.id; return data.user; }
-  async function signUp(email, pw, fullName) { const { data, error } = await sb.auth.signUp({ email, password, options: { data: { full_name: fullName } } }); if (error) throw error; return data.user; }
+  // 带超时兜底：后端不可达时避免请求永久挂起（表现为“点击无反应”）
+  function withTimeout(p, ms, msg) {
+    return Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(msg)), ms))]);
+  }
+  async function signIn(email, pw) {
+    const { data, error } = await withTimeout(sb.auth.signInWithPassword({ email, password }), 12000, "无法连接认证服务器（请求超时）");
+    if (error) throw error; uid = data.user.id; return data.user;
+  }
+  async function signUp(email, pw, fullName) {
+    const { data, error } = await withTimeout(sb.auth.signUp({ email, password, options: { data: { full_name: fullName } } }), 12000, "无法连接认证服务器（请求超时）");
+    if (error) throw error; return data.user;
+  }
   async function signOut() { await sb.auth.signOut(); uid = "demo"; }
 
   // ---------- 通用表操作 ----------

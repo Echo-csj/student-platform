@@ -399,12 +399,19 @@ on conflict (email) do update set encrypted_password = crypt('你的密码', gen
           <p><b>③ 提示“无法连接服务器”？</b>说明 <code>supabase.dosworkbench.top</code> 未启动或 SSL 证书失效，请用浏览器直接打开该地址确认 Studio 登录页能显示。</p>
         </div>
       </details></div>`;
-    $("#auIn").onclick = async () => { try { await Store.signIn($("#auEmail").value, $("#auPw").value); document.body.classList.remove("auth-locked"); toast("已登录"); router(); } catch (e) { toast(authErrMsg(e)); } };
+    $("#auIn").onclick = async () => {
+      const btn = $("#auIn"); btn.disabled = true; const old = btn.textContent; btn.textContent = "登录中…";
+      try { await Store.signIn($("#auEmail").value, $("#auPw").value); document.body.classList.remove("auth-locked"); toast("已登录"); router(); }
+      catch (e) { toast(authErrMsg(e)); }
+      finally { btn.disabled = false; btn.textContent = old; }
+    };
     $("#auUp").onclick = async () => {
+      const btn = $("#auUp"); btn.disabled = true; const old = btn.textContent; btn.textContent = "注册中…";
       try {
         await Store.signUp($("#auEmail").value, $("#auPw").value, "教师");
         toast("注册成功，请直接登录（若提示邮箱未验证，见下方解决办法）");
       } catch (e) { toast(authErrMsg(e)); }
+      finally { btn.disabled = false; btn.textContent = old; }
     };
     return true;
   }

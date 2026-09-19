@@ -238,7 +238,7 @@ td.num, th.num { text-align:right; font-family:var(--font-mono); }
 .toast {
   position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px); background:var(--text); color:var(--bg);
   padding:11px 18px; border-radius:10px; font-size:13px; box-shadow:var(--shadow-lg); opacity:0;
-  transition: all .25s var(--ease-spring); z-index:200; pointer-events:none; max-width:90vw;
+  transition: all .25s var(--ease-spring); z-index:3000; pointer-events:none; max-width:90vw;
 }
 .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
 .select-student { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
