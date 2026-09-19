@@ -11,6 +11,35 @@ window.Store = (function () {
     return !!(cfg.SUPABASE_URL && cfg.SUPABASE_ANON_KEY);
   }
 
+  // 带「超时 + 指数退避重试」的 fetch，注入 Supabase 客户端。
+  // 目的：缓解校园网到 supabase.dosworkbench.top 的 TLS 握手偶发被重置（Connection reset）。
+  // 仅在网络层失败（连接被重置 / 超时）时重试；HTTP 响应（含 4xx/5xx）一律不重试，避免重复写入。
+  function makeResilientFetch(timeoutMs, maxRetries) {
+    return function (input, init) {
+      var attempt = 0;
+      function run() {
+        attempt++;
+        var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+        var timer = controller ? setTimeout(function () { try { controller.abort(); } catch (e) {} }, timeoutMs) : null;
+        var init2 = init || {};
+        if (controller && !init2.signal) init2.signal = controller.signal;
+        return fetch(input, init2).then(function (res) {
+          if (timer) clearTimeout(timer);
+          return res;
+        }, function (err) {
+          if (timer) clearTimeout(timer);
+          if (attempt <= maxRetries) {
+            var delay = Math.min(800 * Math.pow(2, attempt - 1), 5000);
+            return new Promise(function (resolve) { setTimeout(resolve, delay); }).then(run);
+          }
+          throw err;
+        });
+      }
+      return run();
+    };
+  }
+  var resilientFetch = makeResilientFetch(10000, 3);
+
   // ---------- 演示模式文件兜底：IndexedDB（仅本浏览器，非服务器） ----------
   function idb() {
     return new Promise((res, rej) => {
@@ -53,7 +82,7 @@ window.Store = (function () {
           s.onload = res; s.onerror = rej; document.head.appendChild(s);
         });
       }
-      sb = supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
+      sb = supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY, { fetch: resilientFetch });
       const u = await getUser(); // getUser 内部已容错
       uid = u ? u.id : "demo";
       mode = "supabase";
@@ -89,16 +118,14 @@ window.Store = (function () {
     try { const { data } = await sb.auth.getUser(); return data.user || null; }
     catch { return null; }
   }
-  // 带超时兜底：后端不可达时避免请求永久挂起（表现为“点击无反应”）
-  function withTimeout(p, ms, msg) {
-    return Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(msg)), ms))]);
-  }
+  // 超时 + 指数退避重试已由 resilientFetch（注入 createClient 的 fetch）统一负责，
+  // 故此处不再套 withTimeout：避免 12s 硬性超时掐断重试中的请求，造成“时而能登时而失败”。
   async function signIn(email, pw) {
-    const { data, error } = await withTimeout(sb.auth.signInWithPassword({ email, password }), 12000, "无法连接认证服务器（请求超时）");
+    const { data, error } = await sb.auth.signInWithPassword({ email, password });
     if (error) throw error; uid = data.user.id; return data.user;
   }
   async function signUp(email, pw, fullName) {
-    const { data, error } = await withTimeout(sb.auth.signUp({ email, password, options: { data: { full_name: fullName } } }), 12000, "无法连接认证服务器（请求超时）");
+    const { data, error } = await sb.auth.signUp({ email, password, options: { data: { full_name: fullName } } });
     if (error) throw error; return data.user;
   }
   async function signOut() { await sb.auth.signOut(); uid = "demo"; }
