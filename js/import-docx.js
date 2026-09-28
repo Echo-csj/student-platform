@@ -8,42 +8,57 @@
   function pad(n) { return String(n).padStart(2, "0"); }
 
   // 将一个 HTML <table> 展开合并单元格，返回 2D 字符串数组（row -> [col texts]）
+  // 注意：colspan 会把同一文本铺到多列（由 findVal/rowCellsWithCol 做连续去重）；
+  // rowspan 必须对其覆盖的每一行都注册占位，否则中间行整体左移。
   function tableToGrid(table) {
     const rows = Array.from(table.querySelectorAll("tr"));
     const grid = [];
-    const vMerge = []; // vMerge[r] = { col: text } 已被上方 rowspan 占用的列
-    rows.forEach((tr, ri) => {
-      const cells = Array.from(tr.querySelectorAll("td,th"));
+    const pending = {}; // col -> { left: 剩余行数, text }
+    rows.forEach((tr) => {
+      const cells = Array.from(tr.querySelectorAll("td,th")).map((cell) => ({
+        cs: parseInt(cell.getAttribute("colspan") || "1", 10) || 1,
+        rs: parseInt(cell.getAttribute("rowspan") || "1", 10) || 1,
+        txt: (cell.textContent || "").replace(/\s+/g, " ").trim(),
+      }));
       const rowArr = [];
-      const occupied = {};
-      (vMerge[ri] || []).forEach(([c, txt]) => { occupied[c] = true; rowArr[c] = txt; });
-      let ci = 0;
-      cells.forEach((cell) => {
-        while (occupied[ci]) ci++;
-        const cs = parseInt(cell.getAttribute("colspan") || "1", 10) || 1;
-        const rs = parseInt(cell.getAttribute("rowspan") || "1", 10) || 1;
-        const txt = (cell.textContent || "").replace(/\s+/g, " ").trim();
-        for (let k = 0; k < cs; k++) {
-          rowArr[ci + k] = txt;
-          if (rs > 1) (vMerge[ri + rs] = vMerge[ri + rs] || []).push([ci + k, txt]);
-          occupied[ci + k] = true;
+      let ci = 0, i = 0;
+      while (i < cells.length || pending[ci]) {
+        if (pending[ci]) {
+          const p = pending[ci];
+          rowArr[ci] = p.text;
+          if (--p.left <= 0) delete pending[ci];
+          ci++;
+        } else {
+          const c = cells[i++];
+          for (let k = 0; k < c.cs; k++) {
+            rowArr[ci + k] = c.txt;
+            if (c.rs > 1) pending[ci + k] = { left: c.rs - 1, text: c.txt };
+          }
+          ci += c.cs;
         }
-        ci += cs;
-      });
+      }
       grid.push(rowArr);
     });
     return grid;
   }
 
   // 在展开后的网格中，按标签找其右侧/下方的值
+  // 关键：标签自身常带 colspan（展开后同名延续多列），必须先跳过标签自己的延续列，
+  // 否则会把「学校」的值读成「学校」。
   function findVal(grid, label) {
     for (let r = 0; r < grid.length; r++) {
       const row = grid[r] || [];
       for (let c = 0; c < row.length; c++) {
         if (row[c] && row[c].trim() === label) {
-          for (let k = c + 1; k < row.length; k++) if (row[k]) return row[k];
-          if (grid[r + 1] && grid[r + 1][c]) return grid[r + 1][c];
-          if (grid[r + 1] && grid[r + 1][c + 1]) return grid[r + 1][c + 1];
+          let e = c + 1;
+          while (e < row.length && row[e].trim() === label) e++; // 跳过标签延续列
+          for (let k = e; k < row.length; k++) {
+            if (row[k] && row[k].trim() !== label) return row[k];
+          }
+          const nxt = grid[r + 1] || [];
+          for (let k = e; k < nxt.length; k++) {
+            if (nxt[k] && nxt[k].trim() !== label) return nxt[k];
+          }
         }
       }
     }
@@ -51,13 +66,16 @@
   }
 
   // 取某一行标签右侧（或该行）的全部非空单元格，保留列号：[{col,text}]
+  // 连续相同文本视为同一单元格的 colspan 延续，只保留首个（列号取起始列）。
   function rowCellsWithCol(grid, label) {
     for (let r = 0; r < grid.length; r++) {
       const row = grid[r] || [];
       const ci = row.indexOf(label);
       if (ci >= 0) {
         const out = [];
-        for (let c = ci + 1; c < row.length; c++) if (row[c]) out.push({ col: c, text: row[c] });
+        for (let c = ci + 1; c < row.length; c++) {
+          if (row[c] && row[c] !== row[c - 1]) out.push({ col: c, text: row[c] });
+        }
         return out;
       }
     }
