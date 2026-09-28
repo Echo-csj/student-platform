@@ -157,6 +157,7 @@
     const s = (await Store.list("students")).find((x) => x.id === id); if (!s) return;
     const as = (await Store.list("assessments")).filter((a) => a.student_id === id).sort((a, b) => a.date.localeCompare(b.date));
     const dg = (await Store.list("diagnoses")).filter((d) => d.student_id === id);
+    const scs = (await Store.list("subject_scores")).filter((x) => x.student_id === id).sort((a, b) => (a.subject || "").localeCompare(b.subject || "", "zh"));
     setCrumb("学员档案");
     $("#topActions").innerHTML = `<button class="btn btn-sm" id="edSt">编辑</button>`;
     const tags = (s.tags || []).map((t) => `<span class="tag tag-indigo">${esc(t)}</span>`).join(" ") || "<span class='muted'>无</span>";
@@ -164,7 +165,10 @@
     $("#view").innerHTML = `<div class="grid grid-3 mb-16"><div class="card stat"><div class="label">年级/学科</div><div class="value" style="font-size:18px">${esc(s.grade || "-")} · ${esc(s.subject || "-")}</div></div><div class="card stat"><div class="label">测评</div><div class="value">${as.length}<small> 次</small></div></div><div class="card stat"><div class="label">诊断</div><div class="value">${dg.length}<small> 份</small></div></div></div>
     <div class="grid grid-2"><div class="card card-pad"><div class="section-title">档案</div><div class="row"><div><div class="muted" style="font-size:12px">学校</div>${esc(s.school || "-")}</div><div><div class="muted" style="font-size:12px">入学</div><div class="mono">${fmtDate(s.enroll_date)}</div></div></div><div class="mt-16"><div class="muted" style="font-size:12px">标签</div><div class="mt-8">${tags}</div></div><div class="mt-16"><div class="muted" style="font-size:12px">备注</div><div class="mt-8 subtle">${esc(s.notes || "无")}</div></div></div>
     <div class="card card-pad"><div class="section-title">快捷入口</div><div class="flex gap-12" style="flex-wrap:wrap"><button class="btn btn-primary btn-sm" id="qEn">入学诊断</button><button class="btn btn-sm" id="qSu">教学建议</button><button class="btn btn-sm" id="qPl">课程规划</button><button class="btn btn-sm" id="qAr">成长档案</button></div><hr class="hr"/><div class="note">在顶部导航按「入学诊断→教学建议→课程规划→学情记录→阶段诊断→成长档案」顺序推进。</div></div></div>
-    <div class="card card-pad mt-16"><div class="section-title">排课申请信息</div>
+    <div class="card card-pad mt-16"><div class="section-title">入学成绩</div>
+      ${scs.length ? `<table><thead><tr><th>科目</th><th>得分</th><th>卷面总分</th><th>得分率</th></tr></thead><tbody>${scs.map((x) => `<tr><td>${esc(x.subject)}</td><td class="mono num">${x.score ?? "—"}</td><td class="mono num">${x.full_score ?? "—"}</td><td>${x.score != null && x.full_score ? rateChip(x.score / x.full_score) : '<span class="muted">—</span>'}</td></tr>`).join("")}</tbody></table>` : `<div class="muted" style="font-size:12.5px">暂无（编辑学员或批量导入排课申请 .docx 即可录入）</div>`}
+      <hr class="hr"/>
+      <div class="section-title">排课申请信息</div>
       <div class="kv-grid">${impInfoRows(s)}</div>
       ${(s.personality || s.goals || s.advisor_note || s.teacher_req || s.schedule_note) ? `
       <div class="mt-16">
@@ -183,10 +187,38 @@
     $("#qPl").onclick = () => (location.hash = "#/plan/" + id);
     $("#qAr").onclick = () => (location.hash = "#/archive/" + id);
   }
-  function openStudentModal(s) {
-    const e = !!s; const o = s || { name: "", grade: "", school: "", subject: "", enroll_date: fmtDate(new Date().toISOString()), phone: "", tags: [], notes: "" };
-    openModal("学员信息", `<label class="fld"><span>姓名 *</span><input id="f_name" value="${esc(o.name)}"></label><div class="row"><label class="fld"><span>年级</span><input id="f_grade" value="${esc(o.grade)}"></label><label class="fld"><span>学科</span><input id="f_subject" value="${esc(o.subject)}"></label></div><div class="row"><label class="fld"><span>学校</span><input id="f_school" value="${esc(o.school)}"></label><label class="fld"><span>入学日期</span><input id="f_enroll" type="date" value="${esc(o.enroll_date)}"></label></div><label class="fld"><span>标签(逗号分隔)</span><input id="f_tags" value="${esc((o.tags || []).join(", "))}"></label><label class="fld"><span>备注</span><textarea id="f_notes">${esc(o.notes)}</textarea></label>`,
-      [{ label: "取消", cls: "btn-ghost", onClick: closeModal }, { label: e ? "保存" : "创建", cls: "btn-primary", onClick: async () => { const name = $("#f_name").value.trim(); if (!name) return toast("请填写姓名"); const row = { name, grade: $("#f_grade").value.trim(), school: $("#f_school").value.trim(), subject: $("#f_subject").value.trim(), enroll_date: $("#f_enroll").value, phone: $("#f_phone").value.trim(), tags: $("#f_tags").value.split(",").map((t) => t.trim()).filter(Boolean), notes: $("#f_notes").value.trim() }; if (e) await Store.upsert("students", { ...s, ...row }); else await Store.upsert("students", row); closeModal(); toast("已保存"); viewStudents(); } }]);
+  const scRowHtml = (sub, sc, full) => `<div class="score-row"><input class="sr-sub" placeholder="科目" value="${esc(sub || "")}"><input class="sr-score" type="number" step="0.5" placeholder="得分" value="${sc ?? ""}"><input class="sr-full" type="number" step="0.5" placeholder="卷面总分" value="${full ?? ""}"><button class="sr-del" type="button" title="删除该科">×</button></div>`;
+  async function openStudentModal(s) {
+    const e = !!s; const o = s || { name: "", grade: "", school: "", subject: "", enroll_date: fmtDate(new Date().toISOString()), tags: [], notes: "" };
+    const exScores = e && s.id ? (await Store.list("subject_scores")).filter((x) => x.student_id === s.id) : [];
+    openModal("学员信息", `
+      <label class="fld"><span>姓名 *</span><input id="f_name" value="${esc(o.name)}"></label>
+      <div class="row"><label class="fld"><span>年级</span><input id="f_grade" value="${esc(o.grade)}"></label><label class="fld"><span>学科</span><input id="f_subject" value="${esc(o.subject)}"></label></div>
+      <div class="row"><label class="fld"><span>学校</span><input id="f_school" value="${esc(o.school)}"></label><label class="fld"><span>入学日期</span><input id="f_enroll" type="date" value="${esc(o.enroll_date)}"></label></div>
+      <label class="fld"><span>标签(逗号分隔)</span><input id="f_tags" value="${esc((o.tags || []).join(", "))}"></label>
+      <label class="fld"><span>备注</span><textarea id="f_notes">${esc(o.notes)}</textarea></label>
+      <div class="section-title mt-8">入学成绩</div>
+      <div class="note mb-8">按科目记录入学/摸底分数；批量导入排课申请 .docx 后会自动填充，也可在此手工维护。有分数时保存会自动生成「入学测」。</div>
+      <div id="scList">${exScores.map((x) => scRowHtml(x.subject, x.score, x.full_score)).join("")}</div>
+      <button class="btn btn-sm" id="scAdd" type="button">＋ 添加科目</button>`,
+      [{ label: "取消", cls: "btn-ghost", onClick: closeModal }, { label: e ? "保存" : "创建", cls: "btn-primary", onClick: async () => {
+        const name = $("#f_name").value.trim(); if (!name) return toast("请填写姓名");
+        const subs = $$("#scList .score-row").map((row) => ({
+          subject: row.querySelector(".sr-sub").value.trim(),
+          score: row.querySelector(".sr-score").value === "" ? null : +row.querySelector(".sr-score").value,
+          full: row.querySelector(".sr-full").value === "" ? null : +row.querySelector(".sr-full").value,
+        })).filter((x) => x.subject);
+        const row = { name, grade: $("#f_grade").value.trim(), school: $("#f_school").value.trim(), subject: $("#f_subject").value.trim(), enroll_date: $("#f_enroll").value, tags: $("#f_tags").value.split(",").map((t) => t.trim()).filter(Boolean), notes: $("#f_notes").value.trim() };
+        if (subs.length) { row.subjects = subs.map((x) => x.subject); if (!row.subject) row.subject = subs[0].subject; }
+        const st = e ? await Store.upsert("students", { ...s, ...row, id: s.id }) : await Store.upsert("students", row);
+        await saveStudentScores(st, subs, row.enroll_date, "manual");
+        // 手工把成绩行删空时，同步清掉该生已存的成绩明细（入学测等诊断记录保留）
+        if (!subs.length && e && exScores.length) await Store.removeWhere("subject_scores", "student_id", s.id);
+        closeModal(); toast("已保存"); viewStudents();
+      } }]);
+    const bindDel = (row) => (row.querySelector(".sr-del").onclick = () => row.remove());
+    $("#scAdd").onclick = () => { const d = document.createElement("div"); d.className = "score-row"; d.innerHTML = `<input class="sr-sub" placeholder="科目"><input class="sr-score" type="number" step="0.5" placeholder="得分"><input class="sr-full" type="number" step="0.5" placeholder="卷面总分"><button class="sr-del" type="button" title="删除该科">×</button>`; $("#scList").appendChild(d); bindDel(d); };
+    $$("#scList .score-row").forEach(bindDel);
   }
 
   // ================= 批量导入（排课申请 .docx） =================
@@ -263,6 +295,19 @@
     if (btn) { btn.textContent = "完成"; btn.onclick = () => { closeModal(); viewStudents(); }; }
     toast(`导入完成：新增 ${res.created} · 更新 ${res.updated} · 失败 ${res.errors.length}`);
   }
+  // 写入某学员的多科目入学成绩（subject_scores），并重建「入学测」评估
+  // 手工录入（openStudentModal）与批量导入（importStudents）共用，保证数据口径一致
+  async function saveStudentScores(student, subs, enrollDate, source) {
+    if (!student || !student.id || !subs || !subs.length) return;
+    await Store.removeWhere("subject_scores", "student_id", student.id);
+    await Store.upsertBatch("subject_scores", subs.map((s) => ({ student_id: student.id, subject: s.subject, score: s.score, full_score: s.full, owner_id: Store.getUid() })));
+    // 重建该生「入学测」测评（覆盖旧入学测）
+    const exA = (await Store.list("assessments")).filter((a) => a.student_id === student.id && a.type === "enrollment");
+    exA.forEach((a) => Store.remove("assessments", a.id));
+    const tot = subs.reduce((a, s) => a + (+s.score || 0), 0);
+    const full = subs.reduce((a, s) => a + (+s.full || 0), 0);
+    await Store.upsert("assessments", { student_id: student.id, name: "入学测", date: enrollDate || fmtDate(new Date().toISOString()), type: "enrollment", total_score: tot, total_full: full, source: source || "docx_import" });
+  }
   // 覆盖更新导入：每条学员写入 students，并重建 subject_scores 与入学测
   async function importStudents(rows, { onDuplicate = "overwrite" } = {}) {
     const res = { created: 0, updated: 0, errors: [] };
@@ -289,16 +334,7 @@
           student = await Store.upsert("students", base);
           res.created++;
         }
-        if (subs.length) {
-          await Store.removeWhere("subject_scores", "student_id", student.id);
-          await Store.upsertBatch("subject_scores", subs.map((s) => ({ student_id: student.id, subject: s.subject, score: s.score, full_score: s.full, owner_id: Store.getUid() })));
-          // 重建该生「入学测」测评（覆盖旧入学测）
-          const exA = (await Store.list("assessments")).filter((a) => a.student_id === student.id && a.type === "enrollment");
-          exA.forEach((a) => Store.remove("assessments", a.id));
-          const tot = subs.reduce((a, s) => a + (+s.score || 0), 0);
-          const full = subs.reduce((a, s) => a + (+s.full || 0), 0);
-          await Store.upsert("assessments", { student_id: student.id, name: "入学测", date: base.enroll_date, type: "enrollment", total_score: tot, total_full: full, source: "docx_import" });
-        }
+        if (subs.length) await saveStudentScores(student, subs, base.enroll_date, "docx_import");
       } catch (e) { res.errors.push({ row: i + 1, reason: e.message || String(e) }); }
     }
     return res;
