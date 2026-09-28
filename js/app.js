@@ -7,6 +7,14 @@
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const fmtDate = (d) => (d ? String(d).slice(0, 10) : "");
+  function impInfoRows(s) {
+    const subj = (s.subjects && s.subjects.length) ? s.subjects.join("、") : (s.subject || "—");
+    const rows = [
+      ["性别", s.gender], ["班型", s.class_type], ["家长联系", s.parent_contact],
+      ["缴费方式", s.payment_method], ["陪读情况", s.accompany], ["辅导科目", subj],
+    ];
+    return rows.map(([k, v]) => `<div class="kv"><div class="muted" style="font-size:12px">${k}</div><div class="mt-4">${esc(v || "—")}</div></div>`).join("");
+  }
   const rateColor = (r) => (r >= 0.8 ? "var(--green)" : r >= 0.6 ? "var(--amber)" : "var(--red)");
   const rateChip = (r) => `<span class="chip" style="background:color-mix(in srgb,${rateColor(r)} 14%,var(--bg));color:${rateColor(r)}">${(r * 100).toFixed(1)}% · ${r >= 0.8 ? "达标" : r >= 0.6 ? "偏弱" : "薄弱"}</span>`;
   function toast(m) { const t = $("#toast"); t.textContent = m; t.classList.add("show"); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), 2200); }
@@ -125,11 +133,12 @@
   async function viewStudents() {
     setCrumb("学员档案与测评概览");
     const sts = await Store.list("students");
-    $("#topActions").innerHTML = `<button class="btn btn-primary btn-sm" id="addSt">新增学员</button>`;
+    $("#topActions").innerHTML = `<button class="btn btn-sm" id="impBtn">批量导入</button><button class="btn btn-primary btn-sm" id="addSt">新增学员</button>`;
     let html = sts.length ? `<div class="card"><div class="card-head"><h3>学员列表（${sts.length}）</h3><input id="stSearch" placeholder="搜索姓名/学校/标签" style="width:240px"></div><div class="card-pad" style="padding-top:8px"><table><thead><tr><th>姓名</th><th>年级/学科</th><th>学校</th><th>入学</th><th>测评</th><th>最近得分率</th><th></th></tr></thead><tbody id="stBody"></tbody></table></div></div>` : `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg><p>还没有学员，点击右上角新增。</p></div>`;
     $("#view").innerHTML = html;
     if (sts.length) renderStudentRows("");
     $("#addSt").onclick = () => openStudentModal(null);
+    $("#impBtn").onclick = openImportModal;
     const s = $("#stSearch"); if (s) s.oninput = (e) => renderStudentRows(e.target.value);
   }
   async function renderStudentRows(q) {
@@ -155,6 +164,17 @@
     $("#view").innerHTML = `<div class="grid grid-3 mb-16"><div class="card stat"><div class="label">年级/学科</div><div class="value" style="font-size:18px">${esc(s.grade || "-")} · ${esc(s.subject || "-")}</div></div><div class="card stat"><div class="label">测评</div><div class="value">${as.length}<small> 次</small></div></div><div class="card stat"><div class="label">诊断</div><div class="value">${dg.length}<small> 份</small></div></div></div>
     <div class="grid grid-2"><div class="card card-pad"><div class="section-title">档案</div><div class="row"><div><div class="muted" style="font-size:12px">学校</div>${esc(s.school || "-")}</div><div><div class="muted" style="font-size:12px">入学</div><div class="mono">${fmtDate(s.enroll_date)}</div></div></div><div class="mt-16"><div class="muted" style="font-size:12px">标签</div><div class="mt-8">${tags}</div></div><div class="mt-16"><div class="muted" style="font-size:12px">备注</div><div class="mt-8 subtle">${esc(s.notes || "无")}</div></div></div>
     <div class="card card-pad"><div class="section-title">快捷入口</div><div class="flex gap-12" style="flex-wrap:wrap"><button class="btn btn-primary btn-sm" id="qEn">入学诊断</button><button class="btn btn-sm" id="qSu">教学建议</button><button class="btn btn-sm" id="qPl">课程规划</button><button class="btn btn-sm" id="qAr">成长档案</button></div><hr class="hr"/><div class="note">在顶部导航按「入学诊断→教学建议→课程规划→学情记录→阶段诊断→成长档案」顺序推进。</div></div></div>
+    <div class="card card-pad mt-16"><div class="section-title">排课申请信息</div>
+      <div class="kv-grid">${impInfoRows(s)}</div>
+      ${(s.personality || s.goals || s.advisor_note || s.teacher_req || s.schedule_note) ? `
+      <div class="mt-16">
+        ${s.personality ? `<div class="muted" style="font-size:12px">学员性格</div><div class="mt-6 subtle">${esc(s.personality)}</div>` : ""}
+        ${s.goals ? `<div class="muted" style="font-size:12px;margin-top:10px">家长目标</div><div class="mt-6 subtle">${esc(s.goals)}</div>` : ""}
+        ${s.advisor_note ? `<div class="muted" style="font-size:12px;margin-top:10px">顾问建议</div><div class="mt-6 subtle">${esc(s.advisor_note)}</div>` : ""}
+        ${s.teacher_req ? `<div class="muted" style="font-size:12px;margin-top:10px">对老师要求</div><div class="mt-6 subtle">${esc(s.teacher_req)}</div>` : ""}
+        ${s.schedule_note ? `<div class="muted" style="font-size:12px;margin-top:10px">排课时间</div><div class="mt-6 subtle">${esc(s.schedule_note)}</div>` : ""}
+      </div>` : ""}
+    </div>
     <div class="grid grid-2 mt-16"><div class="card"><div class="card-head"><h3>测评记录</h3></div><div class="card-pad" style="padding-top:8px"><table><thead><tr><th>名称</th><th>日期</th><th>类型</th><th>得分</th><th>得分率</th><th></th></tr></thead><tbody>${asRows}</tbody></table></div></div>
     <div class="card"><div class="card-head"><h3>诊断记录</h3></div><div class="card-pad" style="padding-top:8px"><table><thead><tr><th>类型</th><th>日期</th><th>得分率</th></tr></thead><tbody>${dg.length ? dg.map((d) => `<tr><td>${d.kind === "enrollment" ? "入学" : "阶段"}</td><td class="mono subtle">${fmtDate(d.created_at)}</td><td>${d.report ? rateChip(d.report.rate) : ""}</td></tr>`).join("") : '<tr><td colspan="3" class="muted" style="text-align:center;padding:18px">暂无</td></tr>'}</tbody></table></div></div></div>`;
     $("#edSt").onclick = () => openStudentModal(s);
@@ -167,6 +187,121 @@
     const e = !!s; const o = s || { name: "", grade: "", school: "", subject: "", enroll_date: fmtDate(new Date().toISOString()), phone: "", tags: [], notes: "" };
     openModal("学员信息", `<label class="fld"><span>姓名 *</span><input id="f_name" value="${esc(o.name)}"></label><div class="row"><label class="fld"><span>年级</span><input id="f_grade" value="${esc(o.grade)}"></label><label class="fld"><span>学科</span><input id="f_subject" value="${esc(o.subject)}"></label></div><div class="row"><label class="fld"><span>学校</span><input id="f_school" value="${esc(o.school)}"></label><label class="fld"><span>入学日期</span><input id="f_enroll" type="date" value="${esc(o.enroll_date)}"></label></div><label class="fld"><span>标签(逗号分隔)</span><input id="f_tags" value="${esc((o.tags || []).join(", "))}"></label><label class="fld"><span>备注</span><textarea id="f_notes">${esc(o.notes)}</textarea></label>`,
       [{ label: "取消", cls: "btn-ghost", onClick: closeModal }, { label: e ? "保存" : "创建", cls: "btn-primary", onClick: async () => { const name = $("#f_name").value.trim(); if (!name) return toast("请填写姓名"); const row = { name, grade: $("#f_grade").value.trim(), school: $("#f_school").value.trim(), subject: $("#f_subject").value.trim(), enroll_date: $("#f_enroll").value, phone: $("#f_phone").value.trim(), tags: $("#f_tags").value.split(",").map((t) => t.trim()).filter(Boolean), notes: $("#f_notes").value.trim() }; if (e) await Store.upsert("students", { ...s, ...row }); else await Store.upsert("students", row); closeModal(); toast("已保存"); viewStudents(); } }]);
+  }
+
+  // ================= 批量导入（排课申请 .docx） =================
+  function openImportModal() {
+    openModal("批量导入学员（排课申请表 .docx）", `
+      <div id="impDrop" class="dropzone">
+        <div class="dz-inner">
+          <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="var(--indigo)" stroke-width="1.6"><path d="M12 16V4m0 0L8 8m4-4 4 4M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+          <div style="margin-top:8px">拖拽 .docx 文件到此，或 <a id="impPick" class="link">点击选择</a></div>
+          <div class="muted" style="font-size:12px;margin-top:4px">支持多文件；每个文件可含多位学员的多张表</div>
+        </div>
+        <input type="file" id="impFile" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple hidden>
+      </div>
+      <div id="impPreview" class="mt-16" style="display:none">
+        <div class="section-title">解析预览（<span id="impCnt">0</span> 条）</div>
+        <table><thead><tr><th></th><th>姓名</th><th>学校</th><th>年级</th><th>科目数</th><th>状态</th></tr></thead><tbody id="impBody"></tbody></table>
+      </div>
+      <div id="impResult" class="mt-16"></div>`,
+      [{ label: "取消", cls: "btn-ghost", onClick: closeModal }, { label: "导入选中", cls: "btn-primary", onClick: runImport }]);
+    const dz = $("#impDrop"), inp = $("#impFile");
+    $("#impPick").onclick = () => inp.click();
+    dz.onclick = (e) => { if (e.target === dz || e.target.classList.contains("dz-inner")) inp.click(); };
+    ["dragover", "dragenter"].forEach((ev) => dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.add("drag"); }));
+    ["dragleave", "drop"].forEach((ev) => dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.remove("drag"); }));
+    dz.addEventListener("drop", (e) => { if (e.dataTransfer.files.length) handleImportFiles(e.dataTransfer.files); });
+    inp.onchange = (e) => { if (e.target.files.length) handleImportFiles(e.target.files); };
+  }
+
+  let _importRows = [];
+  async function handleImportFiles(files) {
+    $("#impPreview").style.display = "block";
+    $("#impBody").innerHTML = '<tr><td colspan="6" class="muted" style="padding:14px">解析中…</td></tr>';
+    const b = $("#modalFoot .btn-primary"); if (b) b.disabled = true;
+    let rows = [];
+    try { rows = await DocxImport.parseDocxFiles([...files]); }
+    catch (e) { $("#impBody").innerHTML = `<tr><td colspan="6" class="muted" style="padding:14px">解析失败：${esc(e.message)}（请确认文件为 .docx 且已联网加载解析库）</td></tr>`; return; }
+    _importRows = rows.map((r) => ({ ...r, _err: validateImportRow(r) }));
+    renderImportPreview();
+  }
+  function validateImportRow(r) {
+    if (!r.name || !r.name.trim()) return "缺少姓名";
+    return "";
+  }
+  function renderImportPreview() {
+    const ok = _importRows.filter((r) => !r._err);
+    $("#impCnt").textContent = _importRows.length;
+    $("#impBody").innerHTML = _importRows.map((r, i) => `<tr>
+      <td><input type="checkbox" data-i="${i}" ${r._err ? "disabled" : ""} ${r._err ? "" : "checked"}></td>
+      <td><strong>${esc(r.name || "")}</strong></td>
+      <td class="subtle">${esc(r.school || "")}</td>
+      <td class="subtle">${esc(r.grade || "")}</td>
+      <td class="num">${(r.subjects || []).length}</td>
+      <td>${r._err ? `<span class="tag tag-red">${esc(r._err)}</span>` : '<span class="tag tag-green">可导入</span>'}</td>
+    </tr>`).join("") || '<tr><td colspan="6" class="muted" style="padding:14px">未解析到学员，请检查文件内容</td></tr>';
+    const b = $("#modalFoot .btn-primary"); if (b) b.disabled = ok.length === 0;
+    $$("#impBody input").forEach((cb) => (cb.onchange = () => {
+      const any = [...$$("#impBody input")].some((x) => x.checked && !x.disabled);
+      const bb = $("#modalFoot .btn-primary"); if (bb) bb.disabled = !any;
+    }));
+  }
+  async function runImport() {
+    const sel = _importRows.filter((r, i) => { const cb = document.querySelector(`#impBody input[data-i="${i}"]`); return cb && cb.checked && !r._err; });
+    if (!sel.length) return;
+    const btn = $("#modalFoot .btn-primary"); if (btn) { btn.disabled = true; btn.textContent = "导入中…"; }
+    const res = await importStudents(sel, { onDuplicate: "overwrite" });
+    $("#impResult").innerHTML = `<div class="card card-pad"><div class="section-title">导入结果</div>
+      <div class="flex gap-12 mt-8">
+        <div class="stat" style="flex:1"><div class="label">新增</div><div class="value">${res.created}</div></div>
+        <div class="stat" style="flex:1"><div class="label">更新</div><div class="value">${res.updated}</div></div>
+        <div class="stat" style="flex:1"><div class="label">失败</div><div class="value">${res.errors.length}</div></div>
+      </div>
+      ${res.errors.length ? `<div class="mt-12 muted">失败明细：</div>` + res.errors.map((e) => `<div class="subtle" style="font-size:12px">· 第 ${e.row} 条：${esc(e.reason)}</div>`).join("") : '<div class="mt-12 tag tag-green">全部成功</div>'}
+    </div>`;
+    if (btn) { btn.textContent = "完成"; btn.onclick = () => { closeModal(); viewStudents(); }; }
+    toast(`导入完成：新增 ${res.created} · 更新 ${res.updated} · 失败 ${res.errors.length}`);
+  }
+  // 覆盖更新导入：每条学员写入 students，并重建 subject_scores 与入学测
+  async function importStudents(rows, { onDuplicate = "overwrite" } = {}) {
+    const res = { created: 0, updated: 0, errors: [] };
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      if (!r.name || !r.name.trim()) { res.errors.push({ row: i + 1, reason: "缺少姓名" }); continue; }
+      try {
+        const existing = await Store.findStudent(r);
+        const subs = r.subjects || [];
+        const base = {
+          name: r.name.trim(), gender: r.gender || "", school: r.school || "", grade: r.grade || "",
+          class_type: r.class_type || "", phone: r.phone || "", parent_contact: r.parent_contact || "",
+          enroll_date: r.enroll_date || fmtDate(new Date().toISOString()),
+          subjects: subs.map((s) => s.subject), subject: (subs[0] || {}).subject || "",
+          payment_method: r.payment_method || "", personality: r.personality || "", goals: r.goals || "",
+          advisor_note: r.advisor_note || "", teacher_req: r.teacher_req || "", schedule_note: r.schedule_note || "",
+          accompany: r.accompany || "", tags: ["1V1"], notes: "",
+        };
+        let student;
+        if (existing) {
+          student = await Store.upsert("students", { ...existing, ...base, id: existing.id });
+          res.updated++;
+        } else {
+          student = await Store.upsert("students", base);
+          res.created++;
+        }
+        if (subs.length) {
+          await Store.removeWhere("subject_scores", "student_id", student.id);
+          await Store.upsertBatch("subject_scores", subs.map((s) => ({ student_id: student.id, subject: s.subject, score: s.score, full_score: s.full, owner_id: Store.getUid() })));
+          // 重建该生「入学测」测评（覆盖旧入学测）
+          const exA = (await Store.list("assessments")).filter((a) => a.student_id === student.id && a.type === "enrollment");
+          exA.forEach((a) => Store.remove("assessments", a.id));
+          const tot = subs.reduce((a, s) => a + (+s.score || 0), 0);
+          const full = subs.reduce((a, s) => a + (+s.full || 0), 0);
+          await Store.upsert("assessments", { student_id: student.id, name: "入学测", date: base.enroll_date, type: "enrollment", total_score: tot, total_full: full, source: "docx_import" });
+        }
+      } catch (e) { res.errors.push({ row: i + 1, reason: e.message || String(e) }); }
+    }
+    return res;
   }
 
   // ================= 视图：入学诊断 =================

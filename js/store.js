@@ -11,35 +11,6 @@ window.Store = (function () {
     return !!(cfg.SUPABASE_URL && cfg.SUPABASE_ANON_KEY);
   }
 
-  // 带「超时 + 指数退避重试」的 fetch，注入 Supabase 客户端。
-  // 目的：缓解校园网到 supabase.dosworkbench.top 的 TLS 握手偶发被重置（Connection reset）。
-  // 仅在网络层失败（连接被重置 / 超时）时重试；HTTP 响应（含 4xx/5xx）一律不重试，避免重复写入。
-  function makeResilientFetch(timeoutMs, maxRetries) {
-    return function (input, init) {
-      var attempt = 0;
-      function run() {
-        attempt++;
-        var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-        var timer = controller ? setTimeout(function () { try { controller.abort(); } catch (e) {} }, timeoutMs) : null;
-        var init2 = init || {};
-        if (controller && !init2.signal) init2.signal = controller.signal;
-        return fetch(input, init2).then(function (res) {
-          if (timer) clearTimeout(timer);
-          return res;
-        }, function (err) {
-          if (timer) clearTimeout(timer);
-          if (attempt <= maxRetries) {
-            var delay = Math.min(800 * Math.pow(2, attempt - 1), 5000);
-            return new Promise(function (resolve) { setTimeout(resolve, delay); }).then(run);
-          }
-          throw err;
-        });
-      }
-      return run();
-    };
-  }
-  var resilientFetch = makeResilientFetch(10000, 3);
-
   // ---------- 演示模式文件兜底：IndexedDB（仅本浏览器，非服务器） ----------
   function idb() {
     return new Promise((res, rej) => {
@@ -82,7 +53,7 @@ window.Store = (function () {
           s.onload = res; s.onerror = rej; document.head.appendChild(s);
         });
       }
-      sb = supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY, { fetch: resilientFetch });
+      sb = supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
       const u = await getUser(); // getUser 内部已容错
       uid = u ? u.id : "demo";
       mode = "supabase";
@@ -118,17 +89,53 @@ window.Store = (function () {
     try { const { data } = await sb.auth.getUser(); return data.user || null; }
     catch { return null; }
   }
-  // 超时 + 指数退避重试已由 resilientFetch（注入 createClient 的 fetch）统一负责，
-  // 故此处不再套 withTimeout：避免 12s 硬性超时掐断重试中的请求，造成“时而能登时而失败”。
+  // 带超时兜底：后端不可达时避免请求永久挂起（表现为“点击无反应”）
+  function withTimeout(p, ms, msg) {
+    return Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(msg)), ms))]);
+  }
   async function signIn(email, pw) {
-    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    const { data, error } = await withTimeout(sb.auth.signInWithPassword({ email, password }), 12000, "无法连接认证服务器（请求超时）");
     if (error) throw error; uid = data.user.id; return data.user;
   }
   async function signUp(email, pw, fullName) {
-    const { data, error } = await sb.auth.signUp({ email, password, options: { data: { full_name: fullName } } });
+    const { data, error } = await withTimeout(sb.auth.signUp({ email, password, options: { data: { full_name: fullName } } }), 12000, "无法连接认证服务器（请求超时）");
     if (error) throw error; return data.user;
   }
   async function signOut() { await sb.auth.signOut(); uid = "demo"; }
+
+  // ---------- 批量导入辅助 ----------
+  // 按 (姓名+学校+年级) 或 手机号 判重，返回已存在学员或 null
+  async function findStudent(r) {
+    if (mode !== "supabase" || !sb) {
+      return (await list("students")).find((s) =>
+        (r.name && s.name === r.name && s.school === r.school && s.grade === r.grade) ||
+        (r.phone && s.phone === r.phone));
+    }
+    const { data } = await sb.from("students").select("*").eq("name", r.name).eq("school", r.school).eq("grade", r.grade);
+    if (data && data.length) return data[0];
+    if (r.phone) {
+      const { data: d2 } = await sb.from("students").select("*").eq("phone", r.phone);
+      if (d2 && d2.length) return d2[0];
+    }
+    return null;
+  }
+  // 按字段删除（用于覆盖更新时先清旧的多科目分数 / 旧入学测）
+  async function removeWhere(t, field, val) {
+    if (mode !== "supabase" || !sb) {
+      dSet(t, dList(t).filter((x) => x[field] !== val));
+      return;
+    }
+    const { error } = await sb.from(t).delete().eq(field, val);
+    if (error) throw error;
+  }
+  // 批量插入（多科目分数）
+  async function upsertBatch(t, rows) {
+    if (!rows || !rows.length) return;
+    if (mode !== "supabase" || !sb) { rows.forEach((r) => dUpsert(t, r)); return; }
+    const payload = rows.map((r) => ({ ...r, owner_id: uid }));
+    const { error } = await sb.from(t).insert(payload);
+    if (error) throw error;
+  }
 
   // ---------- 通用表操作 ----------
   async function list(t, opts = {}) {
@@ -179,5 +186,6 @@ window.Store = (function () {
     getUser, signIn, signUp, signOut,
     list, upsert, remove, setDetails, getDetails,
     uploadFile, fileUrl, uidGen,
+    findStudent, removeWhere, upsertBatch,
   };
 })();
