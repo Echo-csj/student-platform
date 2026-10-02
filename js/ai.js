@@ -1,28 +1,38 @@
 // 学员管理平台 · AI 层（Supabase Edge Function 真实大模型 / 演示模式模板回退）
 window.AI = (function () {
+  const cfg = () => window.APP_CONFIG || {};
+  let edgeSb = null;
+  // 云项目边缘函数（EDGE_URL + EDGE_ANON_KEY 均配置时启用）
+  function edgeReady() { return !!(cfg().EDGE_URL && cfg().EDGE_ANON_KEY && typeof supabase !== "undefined"); }
   const sbReady = () => Store.getMode() === "supabase" && Store.client();
+  // AI 服务是否可用：优先云项目边缘函数，其次自建库
+  function ready() { return edgeReady() || !!sbReady(); }
+  function fnClient() {
+    if (edgeReady()) {
+      if (!edgeSb) edgeSb = supabase.createClient(cfg().EDGE_URL, cfg().EDGE_ANON_KEY);
+      return edgeSb;
+    }
+    return Store.client();
+  }
 
   async function callFn(name, body) {
-    const cfg = window.APP_CONFIG || {};
-    // 边缘函数（grade-paper / ai-text）仍走云项目部署的实例（自建暂未部署），
-    // 通过 EDGE_URL 指定；缺省回退到 SUPABASE_URL。
-    const edgeUrl = (cfg.EDGE_URL || cfg.SUPABASE_URL || "").replace(/\/$/, "");
-    const anon = cfg.SUPABASE_ANON_KEY || "";
-    const sb = (window.supabase && window.supabase.createClient && edgeUrl)
-      ? window.supabase.createClient(edgeUrl, anon)
-      : Store.client();
+    const sb = fnClient();
     const { data, error } = await sb.functions.invoke(name, { body });
     if (error) throw error;
     return data;
   }
 
-  // 批阅图片试卷（多模态）
-  async function gradePaper({ images, answerText, studentName, subject }) {
-    if (!sbReady()) {
-      // 演示模式：无法真批阅图片，提示用 CSV 或返回空
-      throw new Error("演示模式不支持图片 AI 批阅，请上传逐题 CSV，或在 config.js 配置 Supabase 后登录以启用真实 AI 批阅。");
+  // 多模态试卷处理
+  //   mode = "graded"   已批阅试卷：读取卷面上老师已写的分数，不重新判分、不需要答案（路径A）
+  //   mode = "ungraded" 未批阅试卷：按参考答案/评分标准批阅（路径B，默认）
+  async function gradePaper({ images, answerText, studentName, subject, mode }) {
+    const m = mode === "graded" ? "graded" : "ungraded";
+    if (!ready()) {
+      throw new Error(m === "graded"
+        ? "演示模式不支持图片识别，请改用逐题 CSV，或在 config.js 配置 Supabase 后登录以启用真实 AI 识别。"
+        : "演示模式不支持图片 AI 批阅，请上传逐题 CSV，或在 config.js 配置 Supabase 后登录以启用真实 AI 批阅。");
     }
-    return callFn("grade-paper", { images, answerText, studentName, subject });
+    return callFn("grade-paper", { images, answerText, studentName, subject, mode: m });
   }
 
   async function teachSuggest(context) {
@@ -45,5 +55,5 @@ window.AI = (function () {
     return callFn("ai-text", { task: "growth_archive", context });
   }
 
-  return { gradePaper, teachSuggest, coursePlan, stageDiagnosis, growthArchive };
+  return { ready, gradePaper, teachSuggest, coursePlan, stageDiagnosis, growthArchive };
 })();

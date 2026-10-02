@@ -4,8 +4,10 @@
 window.APP_CONFIG = {
   SUPABASE_URL: 'https://supabase.dosworkbench.top',
   SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzg5MTk1Mzk5LCJleHAiOjQxMDI0NDQ4MDB9.Yejt5D7n9lzPzORBa9nUYJrzccPgxk3i5-sihrn-AV4',
-  // 云端 AI 批阅 / 建议（grade-paper / ai-text 边缘函数）仍走云项目地址：自建暂未部署函数。
+  // 云端 AI 批阅 / 建议（grade-paper / ai-text 边缘函数）走云项目地址。
+  // 部署函数后，把该项目的 anon key 填到 EDGE_ANON_KEY，前端才会真正调用它（留空则回退到上面的自建库）。
   EDGE_URL: 'https://zxemcyngesgxpbevdxsu.supabase.co',
+  EDGE_ANON_KEY: '',
 };
 // 术语：学期课次基数（一周1次课）
 window.TERM_SESSIONS = {

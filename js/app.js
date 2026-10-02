@@ -346,12 +346,23 @@
     const { cur, sel } = await studentSelect(studentId, (v) => (location.hash = "#/enroll/" + v));
     $("#topActions").innerHTML = sel;
     let _enImgs = [];
-    const aiReady = Store.getMode() === "supabase" && !!Store.client();
+    const aiReady = typeof AI !== "undefined" && typeof AI.ready === "function" ? AI.ready() : false;
     $("#view").innerHTML = `<div class="card card-pad">
       <div class="section-title">第 1 步 · 录入试卷</div>
       <div class="grid grid-2">
-        <div><div class="note mb-12">路径 A：上传<b>已批阅试卷</b>的逐题 CSV（字段 question_no,module,knowledge_point,cognitive_level,full_score,score,error_type,note），平台直接生成试卷分析。</div>
-        <label class="fld"><span>粘贴逐题 CSV / 上传</span><textarea id="enCsv" style="min-height:130px;font-family:var(--font-mono);font-size:12px" placeholder="question_no,module,knowledge_point,cognitive_level,full_score,score,error_type,note"></textarea><input type="file" id="enFile" accept=".csv,text/csv" class="mt-8"></label></div>
+        <div>
+          <div class="note mb-12">路径 A：上传<b>已批阅试卷</b>（卷面已写分数）的图片，平台直接读取卷面分数生成分析；也可粘贴逐题 CSV。</div>
+          <div id="aDrop" class="dropzone dropzone-sm">
+            <div class="dz-inner">
+              <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="var(--indigo)" stroke-width="1.6"><path d="M12 16V4m0 0L8 8m4-4 4 4M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+              <div style="margin-top:8px">拖拽<b>已批阅试卷图片</b>（可多张）或 CSV 到此，或 <a id="aPick" class="link">点击选择</a></div>
+            </div>
+            <input type="file" id="aFiles" accept=".csv,text/csv,image/*" multiple hidden>
+          </div>
+          <div id="aThumbs" class="thumb-row mt-8"></div>
+          <label class="fld mt-8"><span>或粘贴逐题 CSV</span><textarea id="enCsv" style="min-height:110px;font-family:var(--font-mono);font-size:12px" placeholder="question_no,module,knowledge_point,cognitive_level,full_score,score,error_type,note"></textarea></label>
+          <div class="note ${aiReady ? "note-ok" : "note-warn"} mt-8">${aiReady ? "✓ AI 服务已就绪，可直接读取已批阅试卷图片" : "⚠ 图片识别需配置 AI 服务（config.js 的 EDGE_URL/EDGE_ANON_KEY）并登录；可改用逐题 CSV"}</div>
+        </div>
         <div>
           <div class="note mb-12">路径 B：上传<b>未批阅试卷图片 + 答案</b>，由 AI 批阅后生成分析。</div>
           <div id="enDrop" class="dropzone dropzone-sm">
@@ -363,13 +374,34 @@
           </div>
           <div id="enThumbs" class="thumb-row mt-8"></div>
           <label class="fld mt-8"><span>答案 / 评分标准（文本）</span><textarea id="enAns" style="min-height:80px"></textarea></label>
-          <div id="enAiHint" class="note ${aiReady ? "note-ok" : "note-warn"} mt-8">${aiReady ? "✓ 已连接 Supabase，可选图后由 AI 批阅" : "⚠ 当前为演示模式，选图后需登录并配置 Supabase + AI 才能批阅（或改用路径 A 上传 CSV）"}</div>
+          <div id="enAiHint" class="note ${aiReady ? "note-ok" : "note-warn"} mt-8">${aiReady ? "✓ AI 服务已就绪，可选图后由 AI 批阅" : "⚠ 图片批阅需配置 AI 服务（config.js 的 EDGE_URL/EDGE_ANON_KEY）并登录；或改用路径 A 的逐题 CSV"}</div>
         </div>
       </div>
       <div class="flex gap-8"><button class="btn btn-primary" id="enRunA">路径A · 生成分析</button><button class="btn" id="enRunB">路径B · AI 批阅生成</button><button class="btn btn-sm" id="enSample">填入示例CSV</button></div>
     </div><div id="enOut"></div>`;
     $("#enSample").onclick = () => ($("#enCsv").value = "question_no,module,knowledge_point,cognitive_level,full_score,score,error_type,note\n1,单项选择,冠词,识记,1,0,知识性错误,\n2,阅读理解,细节,理解,2,0,审题信息提取,");
-    $("#enFile").onchange = (e) => { const f = e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => ($("#enCsv").value = r.result); r.readAsText(f); };
+    // 路径 A：已批阅试卷图片（可多张）或 CSV
+    let _aImgs = [];
+    const aRender = () => {
+      const box = $("#aThumbs"); if (!box) return;
+      box.innerHTML = _aImgs.map((f, i) => `<div class="thumb"><img src="${URL.createObjectURL(f)}" alt=""><button class="thumb-x" type="button" data-i="${i}" title="移除">×</button></div>`).join("");
+      $$("#aThumbs .thumb-x").forEach((b) => (b.onclick = () => { _aImgs.splice(+b.dataset.i, 1); aRender(); }));
+    };
+    const aAdd = (list) => {
+      const all = [...list];
+      const imgs = all.filter((f) => f.type.startsWith("image/"));
+      const csvs = all.filter((f) => !f.type.startsWith("image/") && /\.csv$/i.test(f.name));
+      if (csvs.length) { const r = new FileReader(); r.onload = () => ($("#enCsv").value = r.result); r.readAsText(csvs[0]); if (csvs.length > 1) toast("仅读取第一个 CSV 文件"); }
+      if (imgs.length) { _aImgs.push(...imgs); aRender(); }
+      if (!csvs.length && !imgs.length) toast("仅支持 CSV 或图片文件");
+    };
+    const aDz = $("#aDrop");
+    $("#aPick").onclick = () => $("#aFiles").click();
+    aDz.onclick = (e) => { if (e.target === aDz || e.target.classList.contains("dz-inner")) $("#aFiles").click(); };
+    ["dragover", "dragenter"].forEach((ev) => aDz.addEventListener(ev, (e) => { e.preventDefault(); aDz.classList.add("drag"); }));
+    ["dragleave", "drop"].forEach((ev) => aDz.addEventListener(ev, (e) => { e.preventDefault(); aDz.classList.remove("drag"); }));
+    aDz.addEventListener("drop", (e) => { if (e.dataTransfer.files.length) aAdd(e.dataTransfer.files); });
+    $("#aFiles").onchange = (e) => { if (e.target.files.length) aAdd(e.target.files); };
     // 路径 B：图片拖拽 + 缩略图预览
     const enRenderThumbs = () => {
       const box = $("#enThumbs"); if (!box) return;
@@ -384,7 +416,12 @@
     ["dragleave", "drop"].forEach((ev) => enDz.addEventListener(ev, (e) => { e.preventDefault(); enDz.classList.remove("drag"); }));
     enDz.addEventListener("drop", (e) => { if (e.dataTransfer.files.length) enAddFiles(e.dataTransfer.files); });
     $("#enImgs").onchange = (e) => { if (e.target.files.length) enAddFiles(e.target.files); };
-    $("#enRunA").onclick = () => runEnrollA(cur);
+    $("#enRunA").onclick = () => {
+      const csv = $("#enCsv").value.trim();
+      if (_aImgs.length) { if (csv) toast("检测到图片与 CSV，按图片读取卷面分数"); return runEnrollAGraded(cur, () => _aImgs); }
+      if (csv) return runEnrollA(cur);
+      return toast("请选择已批阅试卷图片，或粘贴逐题 CSV");
+    };
     $("#enRunB").onclick = () => runEnrollB(cur, () => _enImgs);
   }
   async function runEnrollA(studentId) {
@@ -395,6 +432,39 @@
     await Store.setDetails(a.id, rows);
     const diag = await Store.upsert("diagnoses", { student_id: studentId, assessment_id: a.id, kind: "enrollment", report: { rate: d.rate, modules: d.modules, errorTypes: d.errorTypes, knowledge: d.knowledge, total: d.total, lostTotal: d.lostTotal }, suggestions: Engine.genSuggestions(d), plan: Engine.genPlan(d) });
     renderEnrollReport(d, diag.id, "已保存入学诊断（可到「教学建议」继续）。");
+  }
+  // 路径 A · 图片：读取「已批阅试卷」卷面上老师已写好的分数，不重新判分、不需要答案
+  async function runEnrollAGraded(studentId, getImgs) {
+    const s = (await Store.list("students")).find((x) => x.id === studentId);
+    const imgs = (getImgs ? getImgs() : []) || [];
+    if (!imgs.length) return toast("请先选择已批阅试卷图片");
+    const ts = Date.now();
+    const images = []; const paperPaths = [];
+    for (const f of imgs) {
+      images.push({ name: f.name, dataUrl: await fileToDataUrl(f) });
+      try { const up = await Store.uploadFile(`${studentId}/enroll/${ts}-${f.name}`, f); paperPaths.push(up.path); }
+      catch (e) { console.warn("试卷上传失败（不影响读取）", e); }
+    }
+    toast("读取已批阅试卷中…");
+    try {
+      const res = await AI.gradePaper({ images, studentName: s ? s.name : "", subject: s ? s.subject : "", mode: "graded" });
+      const rows = (res.details || []).map((r) => ({
+        question_no: r.question_no, module: r.module || "未分类", knowledge_point: r.knowledge_point || "",
+        cognitive_level: r.cognitive_level || "", full_score: +r.full_score || 0,
+        score: r.score == null ? 0 : (+r.score || 0), error_type: r.error_type || "", note: r.note || "",
+        data_source: "ai_read_graded",
+      }));
+      if (!rows.length) return toast("未能从图片中识别出逐题分数，请确认图片清晰且为已批阅试卷");
+      const d = Engine.analyze(rows);
+      const a = await Store.upsert("assessments", { student_id: studentId, name: "入学测", date: fmtDate(new Date().toISOString()), type: "enrollment", total_score: res.summary ? res.summary.totalScore : d.total.s, total_full: res.summary ? res.summary.totalFull : d.total.f, source: "ai_read_graded", paper_url: paperPaths.length ? JSON.stringify(paperPaths) : null });
+      await Store.setDetails(a.id, rows);
+      const diag = await Store.upsert("diagnoses", { student_id: studentId, assessment_id: a.id, kind: "enrollment", report: { rate: d.rate, modules: d.modules, errorTypes: d.errorTypes, knowledge: d.knowledge, total: d.total, lostTotal: d.lostTotal }, suggestions: Engine.genSuggestions(d), plan: Engine.genPlan(d) });
+      const where = Store.getMode() === "supabase"
+        ? "试卷已存入你的 Supabase Storage。"
+        : "（演示模式：图片仅存于本浏览器 IndexedDB，未上传服务器）";
+      $("#aFiles").value = "";
+      renderEnrollReport(d, diag.id, "已读取卷面分数并生成试卷分析。" + where);
+    } catch (err) { toast(err.message || "读取失败"); }
   }
   async function runEnrollB(studentId, getImgs) {
     const s = (await Store.list("students")).find((x) => x.id === studentId);

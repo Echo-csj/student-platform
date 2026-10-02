@@ -1,6 +1,6 @@
 // 学员管理平台 · Service Worker（PWA 离线 + 安装到桌面）
 // 策略：页面导航 network-first（始终拿到最新 HTML），静态资源 cache-first + 后台更新。
-const CACHE = 'sp-shell-v20260928d';
+const CACHE = 'sp-shell-v20260928e';
 const CORE = [
   './',
   './index.html',
@@ -8,13 +8,13 @@ const CORE = [
   './icon.svg',
   './icons/icon-192.png',
   './icons/icon-512.png',
-  './css/styles.css?v=20260928d',
-  './js/config.js?v=20260928d',
-  './js/engine.js?v=20260928d',
-  './js/store.js?v=20260928d',
-  './js/ai.js?v=20260928d',
-  './js/import-docx.js?v=20260928d',
-  './js/app.js?v=20260928d'
+  './css/styles.css?v=20260928e',
+  './js/config.js?v=20260928e',
+  './js/engine.js?v=20260928e',
+  './js/store.js?v=20260928e',
+  './js/ai.js?v=20260928e',
+  './js/import-docx.js?v=20260928e',
+  './js/app.js?v=20260928e'
 ];
 
 self.addEventListener('install', (e) => {
