@@ -345,21 +345,47 @@
     setCrumb("上传试卷 → 试卷分析");
     const { cur, sel } = await studentSelect(studentId, (v) => (location.hash = "#/enroll/" + v));
     $("#topActions").innerHTML = sel;
+    let _enImgs = [];
+    const aiReady = Store.getMode() === "supabase" && !!Store.client();
     $("#view").innerHTML = `<div class="card card-pad">
       <div class="section-title">第 1 步 · 录入试卷</div>
       <div class="grid grid-2">
         <div><div class="note mb-12">路径 A：上传<b>已批阅试卷</b>的逐题 CSV（字段 question_no,module,knowledge_point,cognitive_level,full_score,score,error_type,note），平台直接生成试卷分析。</div>
         <label class="fld"><span>粘贴逐题 CSV / 上传</span><textarea id="enCsv" style="min-height:130px;font-family:var(--font-mono);font-size:12px" placeholder="question_no,module,knowledge_point,cognitive_level,full_score,score,error_type,note"></textarea><input type="file" id="enFile" accept=".csv,text/csv" class="mt-8"></label></div>
-        <div><div class="note mb-12">路径 B：上传<b>未批阅试卷图片 + 答案</b>，由 AI 批阅后生成分析（需配置 Supabase + AI）。</div>
-        <label class="fld"><span>试卷图片（可多张）</span><input type="file" id="enImgs" accept="image/*" multiple></label>
-        <label class="fld"><span>答案 / 评分标准（文本）</span><textarea id="enAns" style="min-height:80px"></textarea></label></div>
+        <div>
+          <div class="note mb-12">路径 B：上传<b>未批阅试卷图片 + 答案</b>，由 AI 批阅后生成分析。</div>
+          <div id="enDrop" class="dropzone dropzone-sm">
+            <div class="dz-inner">
+              <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="var(--indigo)" stroke-width="1.6"><path d="M12 16V4m0 0L8 8m4-4 4 4M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+              <div style="margin-top:8px">拖拽试卷图片到此，或 <a id="enPick" class="link">点击选择</a>（可多张）</div>
+            </div>
+            <input type="file" id="enImgs" accept="image/*" multiple hidden>
+          </div>
+          <div id="enThumbs" class="thumb-row mt-8"></div>
+          <label class="fld mt-8"><span>答案 / 评分标准（文本）</span><textarea id="enAns" style="min-height:80px"></textarea></label>
+          <div id="enAiHint" class="note ${aiReady ? "note-ok" : "note-warn"} mt-8">${aiReady ? "✓ 已连接 Supabase，可选图后由 AI 批阅" : "⚠ 当前为演示模式，选图后需登录并配置 Supabase + AI 才能批阅（或改用路径 A 上传 CSV）"}</div>
+        </div>
       </div>
       <div class="flex gap-8"><button class="btn btn-primary" id="enRunA">路径A · 生成分析</button><button class="btn" id="enRunB">路径B · AI 批阅生成</button><button class="btn btn-sm" id="enSample">填入示例CSV</button></div>
     </div><div id="enOut"></div>`;
     $("#enSample").onclick = () => ($("#enCsv").value = "question_no,module,knowledge_point,cognitive_level,full_score,score,error_type,note\n1,单项选择,冠词,识记,1,0,知识性错误,\n2,阅读理解,细节,理解,2,0,审题信息提取,");
     $("#enFile").onchange = (e) => { const f = e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => ($("#enCsv").value = r.result); r.readAsText(f); };
+    // 路径 B：图片拖拽 + 缩略图预览
+    const enRenderThumbs = () => {
+      const box = $("#enThumbs"); if (!box) return;
+      box.innerHTML = _enImgs.map((f, i) => `<div class="thumb"><img src="${URL.createObjectURL(f)}" alt=""><button class="thumb-x" type="button" data-i="${i}" title="移除">×</button></div>`).join("");
+      $$("#enThumbs .thumb-x").forEach((b) => (b.onclick = () => { _enImgs.splice(+b.dataset.i, 1); enRenderThumbs(); }));
+    };
+    const enAddFiles = (list) => { for (const f of list) if (f.type.startsWith("image/")) _enImgs.push(f); enRenderThumbs(); };
+    const enDz = $("#enDrop");
+    $("#enPick").onclick = () => $("#enImgs").click();
+    enDz.onclick = (e) => { if (e.target === enDz || e.target.classList.contains("dz-inner")) $("#enImgs").click(); };
+    ["dragover", "dragenter"].forEach((ev) => enDz.addEventListener(ev, (e) => { e.preventDefault(); enDz.classList.add("drag"); }));
+    ["dragleave", "drop"].forEach((ev) => enDz.addEventListener(ev, (e) => { e.preventDefault(); enDz.classList.remove("drag"); }));
+    enDz.addEventListener("drop", (e) => { if (e.dataTransfer.files.length) enAddFiles(e.dataTransfer.files); });
+    $("#enImgs").onchange = (e) => { if (e.target.files.length) enAddFiles(e.target.files); };
     $("#enRunA").onclick = () => runEnrollA(cur);
-    $("#enRunB").onclick = () => runEnrollB(cur);
+    $("#enRunB").onclick = () => runEnrollB(cur, () => _enImgs);
   }
   async function runEnrollA(studentId) {
     const csv = $("#enCsv").value.trim(); if (!csv) return toast("请粘贴或上传 CSV");
@@ -370,10 +396,10 @@
     const diag = await Store.upsert("diagnoses", { student_id: studentId, assessment_id: a.id, kind: "enrollment", report: { rate: d.rate, modules: d.modules, errorTypes: d.errorTypes, knowledge: d.knowledge, total: d.total, lostTotal: d.lostTotal }, suggestions: Engine.genSuggestions(d), plan: Engine.genPlan(d) });
     renderEnrollReport(d, diag.id, "已保存入学诊断（可到「教学建议」继续）。");
   }
-  async function runEnrollB(studentId) {
+  async function runEnrollB(studentId, getImgs) {
     const s = (await Store.list("students")).find((x) => x.id === studentId);
-    const imgEls = $("#enImgs").files; const ans = $("#enAns").value.trim();
-    if (!imgEls.length) return toast("请选择试卷图片");
+    const imgEls = (getImgs ? getImgs() : []) || []; const ans = $("#enAns").value.trim();
+    if (!imgEls.length) return toast("请先选择试卷图片");
     const ts = Date.now();
     const images = []; const paperPaths = [];
     for (const f of imgEls) {
@@ -393,6 +419,7 @@
       const where = Store.getMode() === "supabase"
         ? "试卷已存入你的 Supabase Storage。"
         : "（演示模式：图片仅存于本浏览器 IndexedDB，未上传服务器；配置 Supabase 后才会存入你的项目）";
+      $("#enImgs").value = "";
       renderEnrollReport(d, diag.id, "AI 批阅完成，入学诊断已保存。" + where);
     } catch (err) { toast(err.message || "批阅失败"); }
   }

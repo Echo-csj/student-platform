@@ -284,3 +284,13 @@ body.auth-locked #authGate { display:flex; }
 .score-row .sr-score, .score-row .sr-full { font-family:var(--font-mono); }
 .score-row .sr-del { width:30px; height:34px; border:none; background:none; color:var(--text-subtle); font-size:17px; line-height:1; cursor:pointer; border-radius:6px; transition: color var(--t-fast), background var(--t-fast); }
 .score-row .sr-del:hover { color:var(--red-text); background:var(--red-bg); }
+
+/* 试卷分析 · 路径B 图片拖拽与缩略图 */
+.dropzone-sm { padding:16px 18px; }
+.thumb-row { display:flex; flex-wrap:wrap; gap:8px; }
+.thumb { position:relative; width:74px; height:74px; border-radius:8px; overflow:hidden; border:1px solid var(--border-strong); background:var(--bg-subtle); }
+.thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+.thumb-x { position:absolute; top:2px; right:2px; width:18px; height:18px; line-height:16px; text-align:center; border:none; border-radius:50%; background:rgba(0,0,0,.55); color:#fff; font-size:13px; cursor:pointer; }
+.thumb-x:hover { background:var(--red-text); }
+.note-ok { color:#16a34a; }
+.note-warn { color:#d97706; }
